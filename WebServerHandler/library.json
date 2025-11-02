@@ -1,0 +1,26 @@
+{
+  "name": "WebServerHandler",
+  "version": "1.0.0",
+  "description": "Gestione server web asincrono su ESP32 usando ESPAsyncWebServer.",
+  "authors": [
+    {
+      "name": "Filippo Maria Zaniboni",
+      "email": "filippo.zaniboni.88@gmail.com"
+    }
+  ],
+  "frameworks": ["arduino"],
+  "platforms": ["espressif32"],
+  "dependencies": [
+    {
+      "name": "ESPAsyncWebServer",
+      "version": "^3.7.3",
+      "repository": {
+        "type": "git",
+        "url": "https://github.com/esp32async/ESPAsyncWebServer.git"
+      }
+    }
+  ],
+  "build": {
+    "srcFilter": ["+<*>"]
+  }
+}

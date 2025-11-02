@@ -1,0 +1,20 @@
+{
+  "name": "WifiHandler",
+  "version": "1.0.0",
+  "description": "Gestione connessione WiFi su ESP32 con supporto a System e LoggerHandler.",
+  "authors": [
+    {
+      "name": "Filippo Maria Zaniboni",
+      "email": "filippo.zaniboni.88@gmail.com"
+    }
+  ],
+  "frameworks": ["arduino"],
+  "platforms": ["espressif32"],
+  "dependencies": [
+    { "name": "System" },
+    { "name": "LoggerHandler" }
+  ],
+  "build": {
+    "srcFilter": ["+<*>"]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "System",
+  "version": "1.0.0",
+  "description": "Gestione primitive di sistema.",
+  "authors": [
+    {
+      "name": "Filippo Maria Zaniboni",
+      "email": "filippo.zaniboni.88@gmail.com"
+    }
+  ],
+  "frameworks": ["arduino"],
+  "platforms": ["espressif32"],
+  "build": {
+    "srcFilter": ["+<*>"]
+  }
+}

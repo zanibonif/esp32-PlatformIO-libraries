@@ -1,0 +1,34 @@
+{
+  "name": "LittleFSHandler",
+  "version": "1.0.0",
+  "description": "Gestione logging e interfaccia WebServer asincrono per ESP32/Arduino.",
+  "authors": [
+    {
+      "name": "Filippo Maria Zaniboni",
+      "email": "filippo.zaniboni.88@gmail.com"
+    }
+  ],
+  "frameworks": ["arduino"],
+  "platforms": ["espressif32"],
+  "dependencies": [
+    {
+      "name": "ESPAsyncWebServer",
+      "version": "^3.7.3",
+      "repository": {
+        "type": "git",
+        "url": "https://github.com/esp32async/ESPAsyncWebServer.git"
+      }
+    },
+    {
+      "name": "WebSerial",
+      "version": "^2.1.1",
+      "repository": {
+        "type": "git",
+        "url": "https://github.com/ayushsharma82/WebSerial.git"
+      }
+    }
+  ],
+  "build": {
+    "srcFilter": ["+<*>"]
+  }
+}
