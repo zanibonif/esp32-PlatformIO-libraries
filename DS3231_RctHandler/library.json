@@ -1,0 +1,22 @@
+{
+  "name": "DS3231_RtcHandler",
+  "version": "1.0.0",
+  "description": "Singleton class to manage DS3231 RTC on ESP32 with PlatformIO, inspired by NtpHandler design",
+  "authors": [
+    {
+      "name": "Filippo Maria Zaniboni",
+      "email": "filippo.zaniboni.88@gmail.com"
+    }
+  ],
+  "frameworks": ["arduino"],
+  "platforms": ["espressif32"],
+  "dependencies": [
+    {
+      "name": "RTClib",
+      "version": "^2.1.4"
+    }
+  ],
+  "build": {
+    "srcFilter": ["+<*>"]
+  }
+}
