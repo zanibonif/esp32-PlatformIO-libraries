@@ -24,8 +24,9 @@ void LoggerHandler::SetWebServer(AsyncWebServer* server) {
     WebSerial.begin(server);
 }
 
-void LoggerHandler::SetWebServerRunning()     { WebServerRunning = true; }
-void LoggerHandler::SetWebServerNotRunning()  { WebServerRunning = false; }
+void LoggerHandler::SetDateTimeProvider(DateTimeProvider* provider) { TimeProvider = provider; }
+void LoggerHandler::SetWebServerRunning() { WebServerRunning = true; }
+void LoggerHandler::SetWebServerNotRunning() { WebServerRunning = false; }
 void LoggerHandler::SetSerialSpeed(unsigned long BaudRate) { Serial.begin(BaudRate); }
 void LoggerHandler::SetTarget(LogTarget target) { Target = target; }
 void LoggerHandler::Enable()  { LogEnabled = true; }
@@ -87,15 +88,22 @@ void LoggerHandler::WebSerialServiceTask(void* pvParams) {
 }
 
 String LoggerHandler::FormatLog(const LogEntry& entry) {
-    String typeString;
-    switch (entry.Type) {
-        case LogType::Debug:      typeString = "DEBUG";   break;
-        case LogType::Info:       typeString = "INFO";    break;
-        case LogType::Warning:    typeString = "WARNING"; break;
-        case LogType::Error:      typeString = "ERROR";   break;
-        case LogType::FatalError: typeString = "FATAL";   break;
-        default:                  typeString = "UNKNOWN"; break;
+
+    String TimeString = "";
+    if (TimeProvider) {
+        TimeString = TimeProvider->GetFormattedTime("%d/%m/%Y %H:%M:%S") + " | ";
     }
 
-    return typeString + " | " + entry.FunctionName + ": " + entry.Message;
+    String TypeString;
+    switch (entry.Type) {
+        case LogType::Debug:      TypeString = "DEBUG | ";   break;
+        case LogType::Info:       TypeString = "INFO | ";    break;
+        case LogType::Warning:    TypeString = "WARNING | "; break;
+        case LogType::Error:      TypeString = "ERROR | ";   break;
+        case LogType::FatalError: TypeString = "FATAL | ";   break;
+        default:                  TypeString = "UNKNOWN | "; break;
+    }
+
+    return TimeString + TypeString + entry.FunctionName + ": " + entry.Message;
+
 }

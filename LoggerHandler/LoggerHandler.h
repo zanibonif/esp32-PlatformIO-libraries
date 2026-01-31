@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
+#include "DateTimeProvider.h"
 
 enum class LogTarget { SerialOnly, WebSerialOnly, Both };
 enum class LogType { Debug, Info, Warning, Error, FatalError };
@@ -18,10 +19,13 @@ struct LogEntry {
     String Message;
 };
 
+typedef String (*GetTimeFunction)(void*, const String&);
+
 class LoggerHandler {
     public:
         static LoggerHandler& Instance();
 
+        void SetDateTimeProvider(DateTimeProvider* provider);
         void SetWebServer(AsyncWebServer* server);
         void SetWebServerRunning();
         void SetWebServerNotRunning();
@@ -33,6 +37,8 @@ class LoggerHandler {
 
     private:
         LoggerHandler();
+
+        DateTimeProvider* TimeProvider = nullptr;
 
         static void LoggerTask(void* pvParams);
         static void WebSerialServiceTask(void* pvParams);

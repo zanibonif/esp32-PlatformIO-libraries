@@ -3,10 +3,11 @@
 #include <NTPClient.h>
 #include <WiFiUdp.h>
 #include <System.h>
+#include "DateTimeProvider.h"
 
 typedef void (*TimeSyncCallback)();
 
-class NtpHandler {
+class NtpHandler : public DateTimeProvider {
 private:
     String LogName = "NtpHandler";
 
@@ -46,5 +47,5 @@ public:
     void SetOnSyncCallback(TimeSyncCallback Callback);
     void SetOnDesyncCallback(TimeSyncCallback Callback);
     bool IsConnected();
-    String GetFormattedTime(const String& Format = "%H:%M:%S");
+    String GetFormattedTime(const String& Format = "%H:%M:%S") override;
 };
