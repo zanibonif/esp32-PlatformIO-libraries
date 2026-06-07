@@ -1,59 +1,27 @@
-#ifndef WEB_SERVER_HANDLER_H
-#define WEB_SERVER_HANDLER_H
-
+#pragma once
 #include <ESPAsyncWebServer.h>
 
 class WebServerHandler {
-    private:
-        String LogName = "WebServerHandler";
-        AsyncWebServer* Server = nullptr;
-        bool IsStarted = false;
+public:
+    static WebServerHandler& GetInstance ();
+    WebServerHandler (const WebServerHandler&)            = delete;
+    WebServerHandler& operator= (const WebServerHandler&) = delete;
 
-    public:
-        WebServerHandler();
-        ~WebServerHandler();
+    // Configurazione
+    void SetPort (uint16_t Port);
 
-        void Start();
-        void Stop();
+    // Controllo runtime
+    void Start ();
+    void Stop ();
+    AsyncWebServer* GetServer ();
+    bool IsRunning ();
 
-        AsyncWebServer* GetServer();
-        bool IsRunning();
+private:
+    WebServerHandler ();
+
+    AsyncWebServer* _Server    = nullptr;
+    uint16_t        _Port      = 80;
+    bool            _IsStarted = false;
 };
 
-WebServerHandler::WebServerHandler() {
-    Server = new AsyncWebServer(80);
-    LOG(INFO, LogName, "Instance created");
-}
-
-WebServerHandler::~WebServerHandler() {
-    Stop();
-    delete Server;
-    Server = nullptr;
-    LOG(INFO, LogName, "Instance destroyed");
-}
-
-void WebServerHandler::Start() {
-    if (IsStarted) return;
-
-    Server->begin();
-    IsStarted = true;
-    LOG(INFO, LogName, "Server started");
-}
-
-void WebServerHandler::Stop() {
-    if (!IsStarted) return;
-
-    Server->end();
-    IsStarted = false;
-    LOG(INFO, LogName, "Server stopped");
-}
-
-AsyncWebServer* WebServerHandler::GetServer() {
-    return Server;
-}
-
-bool WebServerHandler::IsRunning() {
-    return IsStarted;
-}
-
-#endif // WEB_SERVER_HANDLER_H
+extern WebServerHandler& WebServer;

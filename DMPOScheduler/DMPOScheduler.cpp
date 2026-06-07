@@ -1,14 +1,16 @@
-#include "DMPOScheduler.h"
+﻿#include "DMPOScheduler.h"
 
-DMPOScheduler::DMPOScheduler()
+DMPOScheduler& Scheduler = DMPOScheduler::GetInstance();
+
+DMPOScheduler::DMPOScheduler ()
     : _Started(false)
 {
     LOG(INFO, "DMPOScheduler", "Istanza creata");
 }
 
-int DMPOScheduler::AddTask(TaskConfig& Config)
+int DMPOScheduler::AddTask (TaskConfig& Config)
 {
-    // Verifica che il sistema non sia già stato avviato
+    // Verifica che il sistema non sia giÃ  stato avviato
     if (_Started)
     {
         LOG(ERROR, "DMPOScheduler::AddTask", "Impossibile aggiungere task dopo Begin()");
@@ -19,7 +21,7 @@ int DMPOScheduler::AddTask(TaskConfig& Config)
     // Validazione nome
     if (Config.Name.empty())
     {
-        LOG(ERROR, "DMPOScheduler::AddTask", "Il nome del task non può essere vuoto");
+        LOG(ERROR, "DMPOScheduler::AddTask", "Il nome del task non puÃ² essere vuoto");
         Config.ID = -1;
         return -1;
     }
@@ -27,7 +29,7 @@ int DMPOScheduler::AddTask(TaskConfig& Config)
     // Verifica nome duplicato
     if (_FindTask(Config.Name) != nullptr)
     {
-        LOG(ERROR, "DMPOScheduler::AddTask", ("Task con nome '" + Config.Name + "' già esistente").c_str());
+        LOG(ERROR, "DMPOScheduler::AddTask", ("Task con nome '" + Config.Name + "' giÃ  esistente").c_str());
         Config.ID = -1;
         return -1;
     }
@@ -35,7 +37,7 @@ int DMPOScheduler::AddTask(TaskConfig& Config)
     // Validazione periodo
     if (Config.PeriodUs == 0)
     {
-        LOG(ERROR, "DMPOScheduler::AddTask", "PeriodUs non può essere 0");
+        LOG(ERROR, "DMPOScheduler::AddTask", "PeriodUs non puÃ² essere 0");
         Config.ID = -1;
         return -1;
     }
@@ -43,7 +45,7 @@ int DMPOScheduler::AddTask(TaskConfig& Config)
     // Validazione periodo minimo per task non AppCritical
     if (Config.PeriodUs < 1000 && !Config.AppCritical)
     {
-        LOG(ERROR, "DMPOScheduler::AddTask", ("Task '" + Config.Name + "' ha PeriodUs < 1ms ma non è AppCritical: task non aggiunto").c_str());
+        LOG(ERROR, "DMPOScheduler::AddTask", ("Task '" + Config.Name + "' ha PeriodUs < 1ms ma non Ã¨ AppCritical: task non aggiunto").c_str());
         Config.ID = -1;
         return -1;
     }
@@ -64,10 +66,10 @@ int DMPOScheduler::AddTask(TaskConfig& Config)
     if (Config.AppCritical)
     {
         Config.CoreID = 1;
-        LOG(INFO, "DMPOScheduler::AddTask", ("Task '" + Config.Name + "' è AppCritical, CoreID forzato a 1").c_str());
+        LOG(INFO, "DMPOScheduler::AddTask", ("Task '" + Config.Name + "' Ã¨ AppCritical, CoreID forzato a 1").c_str());
     } else {
         Config.CoreID = 0;
-        LOG(INFO, "DMPOScheduler::AddTask", ("Task '" + Config.Name + "' non è AppCritical, CoreID forzato a 0").c_str());
+        LOG(INFO, "DMPOScheduler::AddTask", ("Task '" + Config.Name + "' non Ã¨ AppCritical, CoreID forzato a 0").c_str());
     }
 
     // Validazione StackSize
@@ -105,9 +107,9 @@ int DMPOScheduler::AddTask(TaskConfig& Config)
     return Config.ID;
 }
 
-bool DMPOScheduler::AddFunction(int TaskID, TaskFunction Fn)
+bool DMPOScheduler::AddFunction (int TaskID, TaskFunction Fn)
 {
-    // Verifica che il sistema non sia già stato avviato
+    // Verifica che il sistema non sia giÃ  stato avviato
     if (_Started)
     {
         LOG(ERROR, "DMPOScheduler::AddFunction", "Impossibile aggiungere funzioni dopo Begin()");
@@ -117,7 +119,7 @@ bool DMPOScheduler::AddFunction(int TaskID, TaskFunction Fn)
     // Validazione puntatore a funzione
     if (!Fn)
     {
-        LOG(ERROR, "DMPOScheduler::AddFunction", "La funzione passata non è valida");
+        LOG(ERROR, "DMPOScheduler::AddFunction", "La funzione passata non Ã¨ valida");
         return false;
     }
 
@@ -137,7 +139,7 @@ bool DMPOScheduler::AddFunction(int TaskID, TaskFunction Fn)
     return true;
 }
 
-DMPOScheduler::TaskDescriptor* DMPOScheduler::_FindTask(int TaskID)
+DMPOScheduler::TaskDescriptor* DMPOScheduler::_FindTask (int TaskID)
 {
     for (TaskDescriptor& Descriptor : _Tasks)
     {
@@ -147,7 +149,7 @@ DMPOScheduler::TaskDescriptor* DMPOScheduler::_FindTask(int TaskID)
     return nullptr;
 }
 
-DMPOScheduler::TaskDescriptor* DMPOScheduler::_FindTask(const std::string& Name)
+DMPOScheduler::TaskDescriptor* DMPOScheduler::_FindTask (const std::string& Name)
 {
     for (TaskDescriptor& Descriptor : _Tasks)
     {
@@ -157,9 +159,9 @@ DMPOScheduler::TaskDescriptor* DMPOScheduler::_FindTask(const std::string& Name)
     return nullptr;
 }
 
-void DMPOScheduler::_AssignDMPOPriorities()
+void DMPOScheduler::_AssignDMPOPriorities ()
 {
-    // DMPO: priorità più alta a deadline più breve, gestita separatamente per core
+    // DMPO: prioritÃ  piÃ¹ alta a deadline piÃ¹ breve, gestita separatamente per core
 
     for (int CoreID = 0; CoreID <= 1; CoreID++)
     {
@@ -174,13 +176,13 @@ void DMPOScheduler::_AssignDMPOPriorities()
         if (CoreTasks.empty())
             continue;
 
-        // Ordinamento per DeadlineUs crescente (deadline più breve = priorità più alta)
+        // Ordinamento per DeadlineUs crescente (deadline piÃ¹ breve = prioritÃ  piÃ¹ alta)
         std::sort(CoreTasks.begin(), CoreTasks.end(), [](const TaskDescriptor* A, const TaskDescriptor* B) {
             return A->DeadlineUs < B->DeadlineUs;
         });
 
-        // Assegnazione priorità: il task con deadline più breve riceve la priorità più alta
-        // Le priorità partono da 1 (minima) fino a CoreTasks.size() (massima)
+        // Assegnazione prioritÃ : il task con deadline piÃ¹ breve riceve la prioritÃ  piÃ¹ alta
+        // Le prioritÃ  partono da 1 (minima) fino a CoreTasks.size() (massima)
         UBaseType_t Priority = static_cast<UBaseType_t>(CoreTasks.size());
         for (TaskDescriptor* Descriptor : CoreTasks)
         {
@@ -188,18 +190,18 @@ void DMPOScheduler::_AssignDMPOPriorities()
             LOG(INFO, "DMPOScheduler::_AssignDMPOPriorities",("Task '" + Descriptor->Name +
                       "' | CoreID: " + std::to_string(CoreID) +
                       " | DeadlineUs: " + std::to_string(Descriptor->DeadlineUs) +
-                      " | Priorità assegnata: " + std::to_string(Priority)).c_str());
+                      " | PrioritÃ  assegnata: " + std::to_string(Priority)).c_str());
             Priority--;
         }
     }
 }
 
-bool DMPOScheduler::Begin()
+bool DMPOScheduler::Begin ()
 {
-    // Verifica che il sistema non sia già stato avviato
+    // Verifica che il sistema non sia giÃ  stato avviato
     if (_Started)
     {
-        LOG(ERROR, "DMPOScheduler::Begin", "Begin() già chiamato in precedenza");
+        LOG(ERROR, "DMPOScheduler::Begin", "Begin() giÃ  chiamato in precedenza");
         return false;
     }
 
@@ -219,7 +221,7 @@ bool DMPOScheduler::Begin()
         }
     }
 
-    // Calcolo priorità DMPO
+    // Calcolo prioritÃ  DMPO
     _AssignDMPOPriorities();
 
     // Creazione task FreeRTOS
@@ -292,7 +294,7 @@ bool DMPOScheduler::Begin()
 
         LOG(INFO, "DMPOScheduler::Begin", ("Task '" + Descriptor.Name +
             "' creato | CoreID: " + std::to_string(Descriptor.CoreID) +
-            " | Priorità: " + std::to_string(Descriptor.Priority) +
+            " | PrioritÃ : " + std::to_string(Descriptor.Priority) +
             " | StackSize: " + std::to_string(Descriptor.StackSize) + " byte").c_str());
     }
 
@@ -301,13 +303,13 @@ bool DMPOScheduler::Begin()
     return true;
 }
 
-void DMPOScheduler::_TaskEntryPoint(void* Param)
+void DMPOScheduler::_TaskEntryPoint (void* Param)
 {
     TaskDescriptor* Descriptor = static_cast<TaskDescriptor*>(Param);
     DMPOScheduler::GetInstance()._RunTask(*Descriptor);
 }
 
-void DMPOScheduler::_RunTask(TaskDescriptor& Task)
+void DMPOScheduler::_RunTask (TaskDescriptor& Task)
 {
     if (Task.AppCritical)
     {
@@ -381,7 +383,7 @@ void DMPOScheduler::_RunTask(TaskDescriptor& Task)
     }
 }
 
-bool DMPOScheduler::EnableTask(int TaskID)
+bool DMPOScheduler::EnableTask (int TaskID)
 {
     TaskDescriptor* Descriptor = _FindTask(TaskID);
     if (Descriptor == nullptr)
@@ -392,7 +394,7 @@ bool DMPOScheduler::EnableTask(int TaskID)
 
     if (Descriptor->Enabled)
     {
-        LOG(WARNING, "DMPOScheduler::EnableTask", ("Task '" + Descriptor->Name + "' già abilitato").c_str());
+        LOG(WARNING, "DMPOScheduler::EnableTask", ("Task '" + Descriptor->Name + "' giÃ  abilitato").c_str());
         return true;
     }
 
@@ -401,7 +403,7 @@ bool DMPOScheduler::EnableTask(int TaskID)
     return true;
 }
 
-bool DMPOScheduler::EnableTask(const std::string& Name)
+bool DMPOScheduler::EnableTask (const std::string& Name)
 {
     TaskDescriptor* Descriptor = _FindTask(Name);
     if (Descriptor == nullptr)
@@ -412,7 +414,7 @@ bool DMPOScheduler::EnableTask(const std::string& Name)
 
     if (Descriptor->Enabled)
     {
-        LOG(WARNING, "DMPOScheduler::EnableTask", ("Task '" + Descriptor->Name + "' già abilitato").c_str());
+        LOG(WARNING, "DMPOScheduler::EnableTask", ("Task '" + Descriptor->Name + "' giÃ  abilitato").c_str());
         return true;
     }
 
@@ -421,7 +423,7 @@ bool DMPOScheduler::EnableTask(const std::string& Name)
     return true;
 }
 
-bool DMPOScheduler::DisableTask(int TaskID)
+bool DMPOScheduler::DisableTask (int TaskID)
 {
     TaskDescriptor* Descriptor = _FindTask(TaskID);
     if (Descriptor == nullptr)
@@ -432,7 +434,7 @@ bool DMPOScheduler::DisableTask(int TaskID)
 
     if (!Descriptor->Enabled)
     {
-        LOG(WARNING, "DMPOScheduler::DisableTask", ("Task '" + Descriptor->Name + "' già disabilitato").c_str());
+        LOG(WARNING, "DMPOScheduler::DisableTask", ("Task '" + Descriptor->Name + "' giÃ  disabilitato").c_str());
         return true;
     }
 
@@ -441,7 +443,7 @@ bool DMPOScheduler::DisableTask(int TaskID)
     return true;
 }
 
-bool DMPOScheduler::DisableTask(const std::string& Name)
+bool DMPOScheduler::DisableTask (const std::string& Name)
 {
     TaskDescriptor* Descriptor = _FindTask(Name);
     if (Descriptor == nullptr)
@@ -452,7 +454,7 @@ bool DMPOScheduler::DisableTask(const std::string& Name)
 
     if (!Descriptor->Enabled)
     {
-        LOG(WARNING, "DMPOScheduler::DisableTask", ("Task '" + Descriptor->Name + "' già disabilitato").c_str());
+        LOG(WARNING, "DMPOScheduler::DisableTask", ("Task '" + Descriptor->Name + "' giÃ  disabilitato").c_str());
         return true;
     }
 
@@ -461,7 +463,7 @@ bool DMPOScheduler::DisableTask(const std::string& Name)
     return true;
 }
 
-void DMPOScheduler::EnableAllTasks()
+void DMPOScheduler::EnableAllTasks ()
 {
     for (TaskDescriptor& Descriptor : _Tasks)
     {
@@ -470,7 +472,7 @@ void DMPOScheduler::EnableAllTasks()
     LOG(INFO, "DMPOScheduler::EnableAllTasks", "Tutti i task abilitati");
 }
 
-void DMPOScheduler::DisableAllTasks()
+void DMPOScheduler::DisableAllTasks ()
 {
     for (TaskDescriptor& Descriptor : _Tasks)
     {
@@ -479,7 +481,7 @@ void DMPOScheduler::DisableAllTasks()
     LOG(INFO, "DMPOScheduler::DisableAllTasks", "Tutti i task disabilitati");
 }
 
-uint32_t DMPOScheduler::GetLastCycleTimeUs(int TaskID)
+uint32_t DMPOScheduler::GetLastCycleTimeUs (int TaskID)
 {
     TaskDescriptor* Descriptor = _FindTask(TaskID);
     if (Descriptor == nullptr)
@@ -490,7 +492,7 @@ uint32_t DMPOScheduler::GetLastCycleTimeUs(int TaskID)
     return Descriptor->LastCycleTimeUs;
 }
 
-uint32_t DMPOScheduler::GetLastCycleTimeUs(const std::string& Name)
+uint32_t DMPOScheduler::GetLastCycleTimeUs (const std::string& Name)
 {
     TaskDescriptor* Descriptor = _FindTask(Name);
     if (Descriptor == nullptr)
@@ -501,7 +503,7 @@ uint32_t DMPOScheduler::GetLastCycleTimeUs(const std::string& Name)
     return Descriptor->LastCycleTimeUs;
 }
 
-uint32_t DMPOScheduler::GetMissedDeadlineCount(int TaskID)
+uint32_t DMPOScheduler::GetMissedDeadlineCount (int TaskID)
 {
     TaskDescriptor* Descriptor = _FindTask(TaskID);
     if (Descriptor == nullptr)
@@ -512,7 +514,7 @@ uint32_t DMPOScheduler::GetMissedDeadlineCount(int TaskID)
     return Descriptor->MissedDeadlineCount;
 }
 
-uint32_t DMPOScheduler::GetMissedDeadlineCount(const std::string& Name)
+uint32_t DMPOScheduler::GetMissedDeadlineCount (const std::string& Name)
 {
     TaskDescriptor* Descriptor = _FindTask(Name);
     if (Descriptor == nullptr)
@@ -523,7 +525,7 @@ uint32_t DMPOScheduler::GetMissedDeadlineCount(const std::string& Name)
     return Descriptor->MissedDeadlineCount;
 }
 
-void DMPOScheduler::PrintStatus()
+void DMPOScheduler::PrintStatus ()
 {
     LOG(INFO, "DMPOScheduler::PrintStatus", "=== DMPO Scheduler Status ===");
     LOG(INFO, "DMPOScheduler::PrintStatus", ("Task registrati: " + std::to_string(_Tasks.size())).c_str());
@@ -536,7 +538,7 @@ void DMPOScheduler::PrintStatus()
             " | ID: "               + std::to_string(Descriptor.ID) +
             " | CoreID: "           + std::to_string(Descriptor.CoreID) +
             " | AppCritical: "      + (Descriptor.AppCritical ? "SI" : "NO") +
-            " | Priorità: "         + std::to_string(Descriptor.Priority) +
+            " | PrioritÃ : "         + std::to_string(Descriptor.Priority) +
             " | PeriodUs: "         + std::to_string(Descriptor.PeriodUs) + " us" +
             " | DeadlineUs: "       + std::to_string(Descriptor.DeadlineUs) + " us" +
             " | Stato: "            + (Descriptor.Enabled ? "ABILITATO" : "DISABILITATO") +

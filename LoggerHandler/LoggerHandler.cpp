@@ -1,16 +1,17 @@
-#include <WebSerial.h>
+﻿#include <WebSerial.h>
 #include "LoggerHandler.h"
 
-LoggerHandler& LoggerHandler::Instance()
+LoggerHandler& LoggerHandler::GetInstance ()
 {
     static LoggerHandler Instance;
     return Instance;
 }
 
-LoggerHandler::LoggerHandler()
+LoggerHandler& Logger = LoggerHandler::GetInstance();
+
+LoggerHandler::LoggerHandler ()
     : _WebServer(nullptr),
       _WebServerRunning(false),
-      _Target(LogTarget::Both),
       _LogEnabled(true),
       _LogQueue(nullptr),
       _DroppedMessages(0)
@@ -19,53 +20,77 @@ LoggerHandler::LoggerHandler()
     _LogQueue           = xQueueCreate(LOGGER_QUEUE_SIZE, sizeof(LogEntry));
 }
 
-void LoggerHandler::SetDateTimeProvider(DateTimeProvider* Provider)
+// --- Configurazione generale ---
+
+void LoggerHandler::SetDateTimeProvider (DateTimeProvider* Provider)
 {
     _TimeProvider = Provider;
 }
 
-void LoggerHandler::SetWebServer(AsyncWebServer* Server)
-{
-    _WebServer = Server;
-    WebSerial.begin(Server);
-}
-
-void LoggerHandler::SetSerialSpeed(unsigned long BaudRate)
+void LoggerHandler::SetSerialSpeed (unsigned long BaudRate)
 {
     Serial.begin(BaudRate);
 }
 
-void LoggerHandler::SetTarget(LogTarget Target)
-{
-    _Target = Target;
-}
-
-void LoggerHandler::SetMaxMessagesPerCycle(int MaxMessages)
+void LoggerHandler::SetMaxMessagesPerCycle (int MaxMessages)
 {
     _MaxMessagesPerCycle = MaxMessages;
 }
 
-void LoggerHandler::Enable()
+// --- Configurazione WebSerial ---
+
+void LoggerHandler::SetWebServer (AsyncWebServer* Server)
 {
-    _LogEnabled = true;
+    _WebServer = Server;
 }
 
-void LoggerHandler::Disable()
-{
-    _LogEnabled = false;
-}
-
-void LoggerHandler::SetWebServerRunning()
+void LoggerHandler::SetWebServerRunning ()
 {
     _WebServerRunning = true;
 }
 
-void LoggerHandler::SetWebServerNotRunning()
+void LoggerHandler::SetWebServerNotRunning ()
 {
     _WebServerRunning = false;
 }
 
-void LoggerHandler::Log(LogType Type, const String& FunctionName, const String& Message)
+// --- Controllo runtime ---
+
+void LoggerHandler::Enable ()
+{
+    _LogEnabled = true;
+}
+
+void LoggerHandler::Disable ()
+{
+    _LogEnabled = false;
+}
+
+void LoggerHandler::EnableSerial ()
+{
+    _SerialEnabled = true;
+}
+
+void LoggerHandler::DisableSerial ()
+{
+    _SerialEnabled = false;
+}
+
+void LoggerHandler::EnableWebSerial ()
+{
+    if (_WebServer)
+        WebSerial.begin(_WebServer);
+    _WebSerialEnabled = true;
+}
+
+void LoggerHandler::DisableWebSerial ()
+{
+    _WebSerialEnabled = false;
+}
+
+// --- Logging ---
+
+void LoggerHandler::Log (LogType Type, const String& FunctionName, const String& Message)
 {
     if (!_LogEnabled) return;
     if (_LogQueue == nullptr) return;
@@ -79,7 +104,6 @@ void LoggerHandler::Log(LogType Type, const String& FunctionName, const String& 
     strncpy(Entry.Message, Message.c_str(), LOGGER_MESSAGE_MAX_LEN - 1);
     Entry.Message[LOGGER_MESSAGE_MAX_LEN - 1] = '\0';
 
-    // Troncamento visibile
     if (FunctionName.length() >= LOGGER_FUNCTION_NAME_MAX_LEN)
         strcpy(&Entry.FunctionName[LOGGER_FUNCTION_NAME_MAX_LEN - 4], "...");
 
@@ -90,7 +114,7 @@ void LoggerHandler::Log(LogType Type, const String& FunctionName, const String& 
         _DroppedMessages++;
 }
 
-void LoggerHandler::LogFromISR(LogType Type, const char* FunctionName, const char* Message)
+void LoggerHandler::LogFromISR (LogType Type, const char* FunctionName, const char* Message)
 {
     if (!_LogEnabled) return;
     if (_LogQueue == nullptr) return;
@@ -111,15 +135,16 @@ void LoggerHandler::LogFromISR(LogType Type, const char* FunctionName, const cha
     portYIELD_FROM_ISR(HigherPriorityTaskWoken);
 }
 
-void LoggerHandler::_PublishLog(const char* FormattedText)
+// --- Internals ---
+
+void LoggerHandler::_PublishLog (const char* FormattedText)
 {
-    if (_Target == LogTarget::SerialOnly || _Target == LogTarget::Both)
+    if (_SerialEnabled)
     {
         Serial.println(FormattedText);
     }
 
-    if ((_Target == LogTarget::WebSerialOnly || _Target == LogTarget::Both) &&
-        _WebServer && _WebServerRunning)
+    if (_WebSerialEnabled && _WebServer && _WebServerRunning)
     {
         if (xSemaphoreTake(_WebSerialSemaphore, pdMS_TO_TICKS(_WebSerialSemaphoreMaxTime)) == pdTRUE)
         {
@@ -129,11 +154,10 @@ void LoggerHandler::_PublishLog(const char* FormattedText)
     }
 }
 
-void LoggerHandler::Loop()
+void LoggerHandler::Loop ()
 {
     if (_LogQueue == nullptr) return;
 
-    // --- Notifica messaggi persi ---
     int Dropped = _DroppedMessages.load();
     if (Dropped > 0)
     {
@@ -147,7 +171,6 @@ void LoggerHandler::Loop()
             _DroppedMessages.fetch_sub(Dropped);
     }
 
-    // --- Svuotamento queue ---
     LogEntry Entry;
     char FormattedBuffer[LOGGER_FORMATTED_MAX_LEN];
     int ProcessedMessages = 0;
@@ -160,8 +183,7 @@ void LoggerHandler::Loop()
         ProcessedMessages++;
     }
 
-    // --- WebSerial loop ---
-    if (_WebServer && _WebServerRunning)
+    if (_WebSerialEnabled && _WebServer && _WebServerRunning)
     {
         if (xSemaphoreTake(_WebSerialSemaphore, pdMS_TO_TICKS(_WebSerialSemaphoreMaxTime)) == pdTRUE)
         {
@@ -171,7 +193,7 @@ void LoggerHandler::Loop()
     }
 }
 
-void LoggerHandler::_FormatLog(const LogEntry& Entry, char* Buffer, size_t BufferSize)
+void LoggerHandler::_FormatLog (const LogEntry& Entry, char* Buffer, size_t BufferSize)
 {
     char TimeString[32] = "";
     if (_TimeProvider)

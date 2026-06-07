@@ -13,14 +13,14 @@ class DMPOScheduler {
 public:
 
     // --- Singleton ---
-    static DMPOScheduler& GetInstance() {
+    static DMPOScheduler& GetInstance () {
         static DMPOScheduler Instance;
         return Instance;
     }
 
     // Eliminazione esplicita di copia e assegnazione
-    DMPOScheduler(const DMPOScheduler&)            = delete;
-    DMPOScheduler& operator=(const DMPOScheduler&) = delete;
+    DMPOScheduler (const DMPOScheduler&)            = delete;
+    DMPOScheduler& operator= (const DMPOScheduler&) = delete;
 
     // --- Tipi pubblici ---
 
@@ -43,38 +43,38 @@ public:
 
     // --- Fase di configurazione ---
 
-    int  AddTask(TaskConfig& Config);
-    bool AddFunction(int TaskID, TaskFunction Fn);
+    int  AddTask (TaskConfig& Config);
+    bool AddFunction (int TaskID, TaskFunction Fn);
 
     // --- Avvio ---
 
-    bool Begin();
+    bool Begin ();
 
     // --- Controllo runtime ---
 
-    bool EnableTask(int TaskID);
-    bool EnableTask(const std::string& Name);
+    bool EnableTask (int TaskID);
+    bool EnableTask (const std::string& Name);
 
-    bool DisableTask(int TaskID);
-    bool DisableTask(const std::string& Name);
+    bool DisableTask (int TaskID);
+    bool DisableTask (const std::string& Name);
 
-    void EnableAllTasks();
-    void DisableAllTasks();
+    void EnableAllTasks ();
+    void DisableAllTasks ();
 
     // --- Diagnostica ---
 
-    uint32_t GetLastCycleTimeUs(int TaskID);
-    uint32_t GetLastCycleTimeUs(const std::string& Name);
+    uint32_t GetLastCycleTimeUs (int TaskID);
+    uint32_t GetLastCycleTimeUs (const std::string& Name);
 
-    uint32_t GetMissedDeadlineCount(int TaskID);
-    uint32_t GetMissedDeadlineCount(const std::string& Name);
+    uint32_t GetMissedDeadlineCount (int TaskID);
+    uint32_t GetMissedDeadlineCount (const std::string& Name);
 
-    void PrintStatus();
+    void PrintStatus ();
 
 private:
 
     // Costruttore privato
-    DMPOScheduler();
+    DMPOScheduler ();
 
     struct TaskDescriptor {
         int             ID;
@@ -101,11 +101,11 @@ private:
     std::vector<TaskDescriptor> _Tasks;
     bool                        _Started;
 
-    void            _AssignDMPOPriorities();
-    static void     _TaskEntryPoint(void* Param);
-    void            _RunTask(TaskDescriptor& Task);
-    TaskDescriptor* _FindTask(int TaskID);
-    TaskDescriptor* _FindTask(const std::string& Name);
+    void            _AssignDMPOPriorities ();
+    static void     _TaskEntryPoint (void* Param);
+    void            _RunTask (TaskDescriptor& Task);
+    TaskDescriptor* _FindTask (int TaskID);
+    TaskDescriptor* _FindTask (const std::string& Name);
 };
 
-#define Scheduler DMPOScheduler::GetInstance()
+extern DMPOScheduler& Scheduler;

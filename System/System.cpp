@@ -1,12 +1,12 @@
-#include "System.h"
+﻿#include "System.h"
 #include <LoggerHandler.h>
 
-String GetLibrariesVersion() {
+String GetLibrariesVersion () {
     return String(LIBRARIES_VERSION_1) + "." + String(LIBRARIES_VERSION_2) + "." + String(LIBRARIES_VERSION_3);
 }
 
-void Hibernate(unsigned long long int HibernationTime) {
-    LOG(INFO, "Hibernate", "Going in hybernation for " + String(HibernationTime) + " seconds");
+void Hibernate (unsigned long long int HibernationTime) {
+    LOG(INFO, "Hibernate", "Going in hibernation for " + String(HibernationTime) + " seconds");
 
     esp_sleep_enable_timer_wakeup(HibernationTime * SECONDS_TO_MICROSECONDS);
     esp_sleep_pd_config(ESP_PD_DOMAIN_MAX, ESP_PD_OPTION_OFF);
@@ -35,7 +35,7 @@ String GetWakeUpReason () {
         case ESP_SLEEP_WAKEUP_COCPU:           WakeUpReasonString = "ESP_SLEEP_WAKEUP_COCPU"; break;
         case ESP_SLEEP_WAKEUP_COCPU_TRAP_TRIG: WakeUpReasonString = "ESP_SLEEP_WAKEUP_COCPU_TRAP_TRIG"; break;
         case ESP_SLEEP_WAKEUP_BT:              WakeUpReasonString = "ESP_SLEEP_WAKEUP_BT"; break;
-        default:                               WakeUpReasonString = "SYSTE_JUST_POWERED_ON"; break;
+        default:                               WakeUpReasonString = "SYSTEM_JUST_POWERED_ON"; break;
     }
 
     LOG(INFO, "GetWakeUpReason", "Wake up reason is " + WakeUpReasonString);

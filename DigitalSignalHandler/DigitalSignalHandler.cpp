@@ -1,85 +1,81 @@
 #include "DigitalSignalHandler.h"
 
-DigitalSignalHandler::DigitalSignalHandler() {
+DigitalSignalHandler::DigitalSignalHandler () {
     LOG(INFO, _LogName, "Instance created");
-    _ActivationDelay = 0;
+    _ActivationDelay   = 0;
     _DeactivationDelay = 0;
-    _Startup = true;
+    _Startup           = true;
 }
 
-DigitalSignalHandler::~DigitalSignalHandler() {
+DigitalSignalHandler::~DigitalSignalHandler () {
     LOG(INFO, _LogName, "Instance deleted");
 }
 
-void DigitalSignalHandler::SetClockTime(unsigned long ClockTime) {
+void DigitalSignalHandler::SetClockTime (unsigned long ClockTime) {
     _ClockTime = ClockTime;
-    LOG(INFO, _LogName, "ClockTime set to " + String (_ClockTime) + " ms");
+    LOG(INFO, _LogName, "ClockTime set to " + String(_ClockTime) + " ms");
 }
 
-void DigitalSignalHandler::SetName(String Name) {
+void DigitalSignalHandler::SetName (String Name) {
     _LogName = "DigitalSignalHandler - " + Name;
     LOG(INFO, _LogName, "Instance active");
 }
 
-void DigitalSignalHandler::Enable() {
+void DigitalSignalHandler::Enable () {
     LOG(INFO, _LogName, "Enabled");
     _Enabled = true;
     _Startup = true;
 }
 
-void DigitalSignalHandler::Disable() {
+void DigitalSignalHandler::Disable () {
     LOG(INFO, _LogName, "Disabled");
     _Enabled = false;
 }
 
-void DigitalSignalHandler::SetActivationDelay(unsigned long ActivationDelay) {
+void DigitalSignalHandler::SetActivationDelay (unsigned long ActivationDelay) {
     _ActivationDelay = ActivationDelay;
     LOG(INFO, _LogName, "Activation delay set to " + String(_ActivationDelay) + " ms");
 }
 
-void DigitalSignalHandler::SetDeactivationDelay(unsigned long DeactivationDelay) {
+void DigitalSignalHandler::SetDeactivationDelay (unsigned long DeactivationDelay) {
     _DeactivationDelay = DeactivationDelay;
     LOG(INFO, _LogName, "Deactivation delay set to " + String(_DeactivationDelay) + " ms");
 }
 
-bool DigitalSignalHandler::IsEnabled() const {
+bool DigitalSignalHandler::IsEnabled () const {
     return _Enabled;
 }
 
-void DigitalSignalHandler::SetActivationCallback(EdgeCallback ActivationCallback) {
+void DigitalSignalHandler::SetActivationCallback (EdgeCallback ActivationCallback) {
     _ActivationCallback = ActivationCallback;
     LOG(INFO, _LogName, "ActivationCallback set");
 }
 
-void DigitalSignalHandler::SetDeactivationCallback(EdgeCallback DeactivationCallback) {
+void DigitalSignalHandler::SetDeactivationCallback (EdgeCallback DeactivationCallback) {
     _DeactivationCallback = DeactivationCallback;
     LOG(INFO, _LogName, "DeactivationCallback set");
 }
 
-bool DigitalSignalHandler::GetSignal() const {
+bool DigitalSignalHandler::GetSignal () const {
     return _PreviousInputValue;
 }
 
-bool DigitalSignalHandler::GetFilteredSignal() const {
+bool DigitalSignalHandler::GetFilteredSignal () const {
     return _OutputValue;
 }
 
-void DigitalSignalHandler::Reset() {
+void DigitalSignalHandler::Reset () {
     _Reset = true;
-    return;
 }
 
-void DigitalSignalHandler::Update(bool InputValue) {
-    if (!_Enabled) {
-        return;
-    }
+void DigitalSignalHandler::Update (bool InputValue) {
+    if (!_Enabled) return;
 
     if (_Startup) {
-        _PreviousInputValue = InputValue;
-        _OutputValue = InputValue;
+        _PreviousInputValue  = InputValue;
+        _OutputValue         = InputValue;
         _PreviousOutputValue = _OutputValue;
-
-        _Timer = ZERO_TIME;
+        _Timer               = ZERO_TIME;
 
         LOG(INFO, _LogName, "Startup - Input: " + String(InputValue) + ", Output: " + String(_OutputValue));
 
@@ -117,21 +113,15 @@ void DigitalSignalHandler::Update(bool InputValue) {
     }
 
     if (_OutputValue == InputValue) {
-        if (InputValue) {
-            _Timer = _DeactivationDelay;
-        } else {
-            _Timer = _ActivationDelay;
-        }
+        _Timer = InputValue ? _DeactivationDelay : _ActivationDelay;
     }
 
     if (_OutputValue && !_PreviousOutputValue) {
         LOG(INFO, _LogName, "Filtered signal activation");
-        if (_ActivationCallback != nullptr)
-            _ActivationCallback();
+        if (_ActivationCallback != nullptr) _ActivationCallback();
     } else if (!_OutputValue && _PreviousOutputValue) {
         LOG(INFO, _LogName, "Filtered signal deactivation");
-        if (_DeactivationCallback != nullptr)
-            _DeactivationCallback();
+        if (_DeactivationCallback != nullptr) _DeactivationCallback();
     }
     _PreviousOutputValue = _OutputValue;
 }

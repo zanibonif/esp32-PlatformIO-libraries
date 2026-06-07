@@ -1,56 +1,63 @@
-#include "NtpHandler.h"
+﻿#include "NtpHandler.h"
 #include "LoggerHandler.h"
 
-NtpHandler& NtpHandler::GetInstance() {
+NtpHandler& NtpHandler::GetInstance () {
     static NtpHandler Instance;
     return Instance;
 }
+NtpHandler& Ntp = NtpHandler::GetInstance();
 
-NtpHandler::NtpHandler()
+NtpHandler::NtpHandler ()
     : _NtpClient(_Udp, "pool.ntp.org", 0, 60000) {
     LOG(INFO, _LogName, "Istanza creata");
 }
 
-void NtpHandler::SetClockTime(unsigned long ClockTime) {
+void NtpHandler::SetClockTime (unsigned long ClockTime) {
     _ClockTime = ClockTime;
-    LOG(INFO, _LogName, "ClockTime set to " + String (_ClockTime) + " ms");
+    LOG(INFO, _LogName, "ClockTime set to " + String(_ClockTime) + " ms");
 }
 
-void NtpHandler::SetGmtOffset(int GmtOffsetHours) {
+void NtpHandler::SetGmtOffset (int GmtOffsetHours) {
     _NtpClient.setTimeOffset(GmtOffsetHours * 3600);
     LOG(INFO, _LogName, "GMT offset impostato a " + String(GmtOffsetHours) + " ore");
 }
 
-void NtpHandler::SetConnectionMaxTime(unsigned long TimeoutMs) {
+void NtpHandler::SetUpdateInterval (unsigned long IntervalMs) {
+    _UpdateInterval = IntervalMs;
+    _NtpClient.setUpdateInterval(_UpdateInterval);
+    LOG(INFO, _LogName, "UpdateInterval impostato a " + String(_UpdateInterval) + " ms");
+}
+
+void NtpHandler::SetConnectionMaxTime (unsigned long TimeoutMs) {
     _ConnectionMaxTime = TimeoutMs;
     LOG(INFO, _LogName, "ConnectionMaxTime impostato a " + String(_ConnectionMaxTime) + " ms");
 }
 
-void NtpHandler::SetOnSyncCallback(TimeSyncCallback Callback) {
+void NtpHandler::SetOnSyncCallback (TimeSyncCallback Callback) {
     _OnSyncCallback = Callback;
     LOG(INFO, _LogName, "Sync callback impostata");
 }
 
-void NtpHandler::SetOnDesyncCallback(TimeSyncCallback Callback) {
+void NtpHandler::SetOnDesyncCallback (TimeSyncCallback Callback) {
     _OnDesyncCallback = Callback;
     LOG(INFO, _LogName, "Desync callback impostata");
 }
 
-void NtpHandler::Enable() {
+void NtpHandler::Enable () {
     _Enabled = true;
     LOG(INFO, _LogName, "Abilitato");
 }
 
-void NtpHandler::Disable() {
+void NtpHandler::Disable () {
     _Enabled = false;
     LOG(INFO, _LogName, "Disabilitato");
 }
 
-bool NtpHandler::IsConnected() {
+bool NtpHandler::IsConnected () {
     return _Connected;
 }
 
-String NtpHandler::GetFormattedTime(const String& Format) {
+String NtpHandler::GetFormattedTime (const String& Format) {
     unsigned long RawTime = _NtpClient.getEpochTime();
     time_t Time = static_cast<time_t>(RawTime);
     struct tm TimeInfo;
@@ -60,11 +67,11 @@ String NtpHandler::GetFormattedTime(const String& Format) {
     return String(Buffer);
 }
 
-unsigned long NtpHandler::GetEpochTime() {
+unsigned long NtpHandler::GetEpochTime () {
     return _NtpClient.getEpochTime();
 }
 
-void NtpHandler::Loop() {
+void NtpHandler::Loop () {
 
     static unsigned long Timer = ZERO_TIME;
     bool Timeout;

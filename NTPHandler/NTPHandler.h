@@ -9,35 +9,35 @@ typedef void (*TimeSyncCallback)();
 
 class NtpHandler : public DateTimeProvider {
 public:
-    static NtpHandler& GetInstance();
+    static NtpHandler& GetInstance ();
 
-    NtpHandler(const NtpHandler&)            = delete;
-    NtpHandler& operator=(const NtpHandler&) = delete;
+    NtpHandler (const NtpHandler&)            = delete;
+    NtpHandler& operator= (const NtpHandler&) = delete;
 
     // Configurazione - solo in fase di setup
-    void SetClockTime(unsigned long ClockTime);
-    void SetGmtOffset(int GmtOffsetHours);
-    void SetUpdateInterval(unsigned long IntervalMs);
-    void SetConnectionMaxTime(unsigned long TimeoutMs);
-    void SetOnSyncCallback(TimeSyncCallback Callback);
-    void SetOnDesyncCallback(TimeSyncCallback Callback);
+    void SetClockTime (unsigned long ClockTime);
+    void SetGmtOffset (int GmtOffsetHours);
+    void SetUpdateInterval (unsigned long IntervalMs);
+    void SetConnectionMaxTime (unsigned long TimeoutMs);
+    void SetOnSyncCallback (TimeSyncCallback Callback);
+    void SetOnDesyncCallback (TimeSyncCallback Callback);
 
     // Controllo runtime
-    void Enable();
-    void Disable();
+    void Enable ();
+    void Disable ();
 
     // Diagnostica
-    bool   IsConnected();
-    String GetFormattedTime(const String& Format = "%H:%M:%S") override;
-    unsigned long GetEpochTime();
+    bool          IsConnected ();
+    String        GetFormattedTime (const String& Format = "%H:%M:%S") override;
+    unsigned long GetEpochTime ();
 
     // Chiamato ciclicamente
-    void Loop();
+    void Loop ();
 
 private:
-    NtpHandler();
+    NtpHandler ();
 
-    enum NtpStateEnum {
+    enum NtpState {
         NOT_CONNECTED,
         CONNECTION_IN_PROGRESS,
         CONNECTED
@@ -52,9 +52,11 @@ private:
     unsigned long    _ConnectionMaxTime   = 10000; // milliseconds
     unsigned long    _UpdateInterval      = 60000; // milliseconds
     unsigned long    _UpdateTimeout       = 5000;  // milliseconds
-    NtpStateEnum     _State               = NOT_CONNECTED;
+    NtpState         _State               = NOT_CONNECTED;
 
     TimeSyncCallback _OnSyncCallback      = nullptr;
     TimeSyncCallback _OnDesyncCallback    = nullptr;
 
 };
+
+extern NtpHandler& Ntp;

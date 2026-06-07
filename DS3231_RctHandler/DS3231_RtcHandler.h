@@ -9,26 +9,29 @@
 
 class DS3231_RtcHandler : public DateTimeProvider {
 public:
-    static DS3231_RtcHandler* GetInstance();
-    static void Destroy();
+    static DS3231_RtcHandler& GetInstance ();
+    DS3231_RtcHandler (const DS3231_RtcHandler&)            = delete;
+    DS3231_RtcHandler& operator= (const DS3231_RtcHandler&) = delete;
 
-    void Enable();
-    void Disable();
-    bool IsEnabled() const;
+    // Configurazione
+    void SetDateTime (uint16_t Year, uint8_t Month, uint8_t Day, uint8_t Hour, uint8_t Minute, uint8_t Second);
 
-    void SetDateTime(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute, uint8_t second);
-    DateTime GetDateTime();
-    String GetFormattedTime(const String& format = "%d/%m/%Y %H:%M:%S") override;
+    // Controllo runtime
+    void Enable ();
+    void Disable ();
+    bool IsEnabled () const;
+
+    // Metodi principali
+    DateTime GetDateTime ();
+    String   GetFormattedTime (const String& Format = "%d/%m/%Y %H:%M:%S") override;
 
 private:
-    DS3231_RtcHandler();
-    ~DS3231_RtcHandler() = default;
+    DS3231_RtcHandler ();
 
-    SemaphoreHandle_t _Mutex;
-
-    static DS3231_RtcHandler* StaticInstance;
-
-    RTC_DS3231 Rtc;
-    bool Enabled = false;
-    const String LogName = "RTC";
+    RTC_DS3231        _Rtc;
+    bool              _Enabled = false;
+    String            _LogName = "RTC";
+    SemaphoreHandle_t _Mutex   = nullptr;
 };
+
+extern DS3231_RtcHandler& Rtc;

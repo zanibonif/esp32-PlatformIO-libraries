@@ -14,8 +14,7 @@
 #define LOGGER_FORMATTED_MAX_LEN      320
 #define LOGGER_QUEUE_SIZE             100
 
-enum class LogTarget { SerialOnly, WebSerialOnly, Both };
-enum class LogType   { Debug, Info, Warning, Error, FatalError };
+enum class LogType { Debug, Info, Warning, Error, FatalError };
 
 #define DEBUG       LogType::Debug
 #define INFO        LogType::Info
@@ -31,40 +30,46 @@ struct LogEntry {
 
 class LoggerHandler {
 public:
-    static LoggerHandler& Instance();
+    static LoggerHandler& GetInstance ();
 
-    // Configurazione - solo in fase di setup
-    void SetDateTimeProvider(DateTimeProvider* Provider);
-    void SetWebServer(AsyncWebServer* Server);
-    void SetSerialSpeed(unsigned long BaudRate);
-    void SetTarget(LogTarget Target);
-    void SetMaxMessagesPerCycle(int MaxMessages);
+    // Configurazione generale
+    void SetDateTimeProvider (DateTimeProvider* Provider);
+    void SetSerialSpeed (unsigned long BaudRate);
+    void SetMaxMessagesPerCycle (int MaxMessages);
+
+    // Configurazione WebSerial
+    void SetWebServer (AsyncWebServer* Server);
+    void SetWebServerRunning ();
+    void SetWebServerNotRunning ();
 
     // Controllo runtime
-    void Enable();
-    void Disable();
-    void SetWebServerRunning();
-    void SetWebServerNotRunning();
+    void Enable ();
+    void Disable ();
+    void EnableSerial ();
+    void DisableSerial ();
+    void EnableWebSerial ();
+    void DisableWebSerial ();
 
     // Logging
-    void Log(LogType Type, const String& FunctionName, const String& Message);
-    void LogFromISR(LogType Type, const char* FunctionName, const char* Message);
+    void Log (LogType Type, const String& FunctionName, const String& Message);
+    void LogFromISR (LogType Type, const char* FunctionName, const char* Message);
 
     // Chiamato ciclicamente
-    void Loop();
+    void Loop ();
 
 private:
-    LoggerHandler();
+    LoggerHandler ();
 
-    void _FormatLog(const LogEntry& Entry, char* Buffer, size_t BufferSize);
-    void _PublishLog(const char* FormattedText);
+    void _FormatLog (const LogEntry& Entry, char* Buffer, size_t BufferSize);
+    void _PublishLog (const char* FormattedText);
 
-    DateTimeProvider*  _TimeProvider            = nullptr;
-    AsyncWebServer*    _WebServer               = nullptr;
-    bool               _WebServerRunning        = false;
-    LogTarget          _Target                  = LogTarget::SerialOnly;
-    bool               _LogEnabled              = true;
-    int                _MaxMessagesPerCycle     = 50;
+    DateTimeProvider*  _TimeProvider              = nullptr;
+    bool               _SerialEnabled             = true;
+    AsyncWebServer*    _WebServer                 = nullptr;
+    bool               _WebServerRunning          = false;
+    bool               _WebSerialEnabled          = false;
+    bool               _LogEnabled                = true;
+    int                _MaxMessagesPerCycle       = 50;
 
     unsigned long      _WebSerialSemaphoreMaxTime = 100;
 
@@ -74,5 +79,7 @@ private:
     std::atomic<int>   _DroppedMessages{0};
 };
 
-#define LOG(Type, FunctionName, Message) LoggerHandler::Instance().Log(Type, FunctionName, Message)
-#define LOG_ISR(Type, FunctionName, Message) LoggerHandler::Instance().LogFromISR(Type, FunctionName, Message)
+extern LoggerHandler& Logger;
+
+#define LOG(Type, FunctionName, Message)     Logger.Log(Type, FunctionName, Message)
+#define LOG_ISR(Type, FunctionName, Message) Logger.LogFromISR(Type, FunctionName, Message)

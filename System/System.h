@@ -20,8 +20,8 @@
 //    Function declarations
 // ----------------------------
 
-String GetLibrariesVersion();
-void Hibernate(unsigned long long int HibernationTime);
-String GetWakeUpReason();
-void SetCpuFrequency(unsigned int CpuFrequency);
-unsigned int GetCpuFrequency();
+String       GetLibrariesVersion ();
+void         Hibernate (unsigned long long int HibernationTime);
+String       GetWakeUpReason ();
+void         SetCpuFrequency (unsigned int CpuFrequency);
+unsigned int GetCpuFrequency ();

@@ -1,90 +1,41 @@
-#ifndef TIMEDISCRETEFILTER_H
-#define TIMEDISCRETEFILTER_H
-
+#pragma once
 #include <System.h>
 
 enum TimeDiscreteFilterType {
-  NO_FILTER,
-  FIRST_ORDER_FILTER,
+    NO_FILTER,
+    FIRST_ORDER_FILTER,
+    MOVING_AVERAGE_FILTER,
 };
 
 class TimeDiscreteFilter {
-    private:
-
-      const float ZERO_DOT_ZERO = 0.0;
-      const float ONE_DOT_ZERO = 1.0;
-
-      // General configuration
-      unsigned long ClockTime;
-      TimeDiscreteFilterType FilterType;
-
-      // FIRST_ORDER_FILTER
-      unsigned long FilterTimeConstant;
-      float Alpha;
-      float OneMinusAlpha;
-
-      // Output
-      float FilteredValue;
-
-      // Internal state
-      bool ResetRequest;
-
 public:
-      TimeDiscreteFilter(unsigned long _ClockTime,
-                        TimeDiscreteFilterType _FilterType = FIRST_ORDER_FILTER,
-                        unsigned long _FilterTimeConstant = 1);
+    TimeDiscreteFilter ();
+    ~TimeDiscreteFilter ();
 
-      void SetClockTime (unsigned long _ClockTime);
-      void Reset ();
-      void UpdateFilterTimeConstant (unsigned long _FilterTimeConstant);
-      float Filter (int _Value);
-};
+    void  SetClockTime (unsigned long ClockTime);
+    void  SetFilterType (TimeDiscreteFilterType FilterType);
+    void  SetFilterTimeConstant (unsigned long FilterTimeConstant);
+    void  SetSamplesNumber (int SamplesNumber);
+    void  Reset ();
+    float Filter (int Value);
+    float Filter (float Value);
 
-
-TimeDiscreteFilter::TimeDiscreteFilter(unsigned long _ClockTime,
-                                       TimeDiscreteFilterType _FilterType,
-                                       unsigned long _FilterTimeConstant) {
-
-    // General configuration
-    ClockTime = _ClockTime;
-    FilterType = _FilterType;
+private:
+    unsigned long          _ClockTime          = 100;
+    TimeDiscreteFilterType _FilterType         = NO_FILTER;
 
     // FIRST_ORDER_FILTER
-    FilterTimeConstant = _FilterTimeConstant;
-    UpdateFilterTimeConstant(FilterTimeConstant);
+    unsigned long          _FilterTimeConstant = 0;
+    float                  _Alpha              = 0.0f;
+    float                  _OneMinusAlpha      = 1.0f;
 
-    Reset();
+    // MOVING_AVERAGE_FILTER
+    int                    _SamplesNumber  = 1;
+    float*                 _Samples        = nullptr;
+    int                    _NewestSampleId = 0;
+    float                  _SamplesSum     = 0.0f;
 
-}
-
-void TimeDiscreteFilter::SetClockTime (unsigned long _ClockTime) {
-    ClockTime = _ClockTime;
-    Reset();
-}
-
-void TimeDiscreteFilter::Reset () {
-    ResetRequest = true;
-}
-
-void TimeDiscreteFilter::UpdateFilterTimeConstant (unsigned long _FilterTimeConstant) {
-    FilterTimeConstant = _FilterTimeConstant;
-    Alpha = (float) ClockTime / (ClockTime + FilterTimeConstant);
-    OneMinusAlpha = ONE_DOT_ZERO - Alpha;
-    ResetRequest = true;
-}
-
-float TimeDiscreteFilter::Filter (int _Value) {
-    if (ResetRequest) {
-        FilteredValue = (float) _Value;
-        ResetRequest = false;
-    } else if (FilterType == FIRST_ORDER_FILTER) {
-        FilteredValue = Alpha * (float) _Value + OneMinusAlpha * FilteredValue;
-    } else if (FilterType == NO_FILTER){
-        FilteredValue = (float) _Value;
-    } else {
-        FilteredValue = ZERO_DOT_ZERO;
-    }
-    return FilteredValue;
-}
-
-#endif // TIMEDISCRETEFILTER_H
+    // Stato comune
+    float                  _FilteredValue  = 0.0f;
+    bool                   _ResetRequest   = true;
+};
