@@ -1,0 +1,16 @@
+{
+  "name": "DMPOScheduler",
+  "version": "1.0.0",
+  "description": "Singleton class implementing a DMPO (Deadline Monotonic Priority Ordering) scheduler for ESP32 with FreeRTOS, supporting both standard and high-frequency (AppCritical) tasks",
+  "authors": [
+    {
+      "name": "Filippo Maria Zaniboni",
+      "email": "filippo.zaniboni.88@gmail.com"
+    }
+  ],
+  "frameworks": ["arduino"],
+  "platforms": ["espressif32"],
+  "build": {
+    "srcFilter": ["+<*>"]
+  }
+}

@@ -1,0 +1,111 @@
+#pragma once
+#include <functional>
+#include <vector>
+#include <string>
+#include <algorithm>
+#include "LoggerHandler.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_timer.h"
+#include "freertos/semphr.h"
+
+class DMPOScheduler {
+public:
+
+    // --- Singleton ---
+    static DMPOScheduler& GetInstance() {
+        static DMPOScheduler Instance;
+        return Instance;
+    }
+
+    // Eliminazione esplicita di copia e assegnazione
+    DMPOScheduler(const DMPOScheduler&)            = delete;
+    DMPOScheduler& operator=(const DMPOScheduler&) = delete;
+
+    // --- Tipi pubblici ---
+
+    using TaskFunction  = std::function<void()>;
+    using ErrorCallback = std::function<void(const std::string& TaskName, uint32_t OverrunUs)>;
+
+    struct TaskConfig {
+        // Campi da compilare dall'utente
+        std::string   Name;
+        uint32_t      PeriodUs;           // Periodo in microsecondi
+        bool          AppCritical;        // Se true, il task viene pinnato automaticamente su Core 1
+        uint32_t      StackSize;          // Stack in byte (default consigliato: 4096)
+        uint32_t      DeadlineUs;         // Se 0, si assume uguale a PeriodUs
+        ErrorCallback OnMissedDeadline;   // Può essere nullptr
+
+        // Popolato da AddTask()
+        int           ID;
+        BaseType_t    CoreID;             // 0 o 1
+    };
+
+    // --- Fase di configurazione ---
+
+    int  AddTask(TaskConfig& Config);
+    bool AddFunction(int TaskID, TaskFunction Fn);
+
+    // --- Avvio ---
+
+    bool Begin();
+
+    // --- Controllo runtime ---
+
+    bool EnableTask(int TaskID);
+    bool EnableTask(const std::string& Name);
+
+    bool DisableTask(int TaskID);
+    bool DisableTask(const std::string& Name);
+
+    void EnableAllTasks();
+    void DisableAllTasks();
+
+    // --- Diagnostica ---
+
+    uint32_t GetLastCycleTimeUs(int TaskID);
+    uint32_t GetLastCycleTimeUs(const std::string& Name);
+
+    uint32_t GetMissedDeadlineCount(int TaskID);
+    uint32_t GetMissedDeadlineCount(const std::string& Name);
+
+    void PrintStatus();
+
+private:
+
+    // Costruttore privato
+    DMPOScheduler();
+
+    struct TaskDescriptor {
+        int             ID;
+        std::string     Name;
+        uint32_t        PeriodUs;
+        uint32_t        DeadlineUs;
+        bool            AppCritical;
+        BaseType_t      CoreID;
+        uint32_t        StackSize;
+        UBaseType_t     Priority;
+        bool            Enabled;
+        TaskHandle_t    Handle;
+        ErrorCallback   OnMissedDeadline;
+
+        esp_timer_handle_t  TimerHandle;
+        SemaphoreHandle_t   TimerSemaphore;
+
+        std::vector<TaskFunction> Functions;
+
+        uint32_t        LastCycleTimeUs;
+        uint32_t        MissedDeadlineCount;
+    };
+
+    std::vector<TaskDescriptor> _Tasks;
+    bool                        _Started;
+
+    void            _AssignDMPOPriorities();
+    static void     _TaskEntryPoint(void* Param);
+    void            _RunTask(TaskDescriptor& Task);
+    TaskDescriptor* _FindTask(int TaskID);
+    TaskDescriptor* _FindTask(const std::string& Name);
+};
+
+#define Scheduler DMPOScheduler::GetInstance()

@@ -1,117 +1,137 @@
 #include "DigitalSignalHandler.h"
 
 DigitalSignalHandler::DigitalSignalHandler() {
-    LOG(INFO, LogName, "Instance created");
-    RisingEdgeFilterTime = 0;
-    FallingEdgeFilterTime = 0;
-    LastInputValueActiveTime = 0;
-    LastInputValueInactiveTime = 0;
+    LOG(INFO, _LogName, "Instance created");
+    _ActivationDelay = 0;
+    _DeactivationDelay = 0;
+    _Startup = true;
 }
 
 DigitalSignalHandler::~DigitalSignalHandler() {
-    LOG(INFO, LogName, "Instance deleted");
+    LOG(INFO, _LogName, "Instance deleted");
 }
 
-void DigitalSignalHandler::SetName(String name) {
-    Name = name;
-    LogName = "DigitalSignalHandler - " + Name;
-    LOG(INFO, LogName, "Instance active");
+void DigitalSignalHandler::SetClockTime(unsigned long ClockTime) {
+    _ClockTime = ClockTime;
+    LOG(INFO, _LogName, "ClockTime set to " + String (_ClockTime) + " ms");
+}
+
+void DigitalSignalHandler::SetName(String Name) {
+    _LogName = "DigitalSignalHandler - " + Name;
+    LOG(INFO, _LogName, "Instance active");
 }
 
 void DigitalSignalHandler::Enable() {
-    LOG(INFO, LogName, "Enabled");
-    Enabled = true;
-    Startup = true;
+    LOG(INFO, _LogName, "Enabled");
+    _Enabled = true;
+    _Startup = true;
 }
 
 void DigitalSignalHandler::Disable() {
-    LOG(INFO, LogName, "Disabled");
-    Enabled = false;
+    LOG(INFO, _LogName, "Disabled");
+    _Enabled = false;
 }
 
-void DigitalSignalHandler::SetRisingEdgeFilterTime(unsigned long filterTime) {
-    RisingEdgeFilterTime = filterTime;
-    LOG(INFO, LogName, "Rising edge filter set to " + String(filterTime) + " ms");
+void DigitalSignalHandler::SetActivationDelay(unsigned long ActivationDelay) {
+    _ActivationDelay = ActivationDelay;
+    LOG(INFO, _LogName, "Activation delay set to " + String(_ActivationDelay) + " ms");
 }
 
-void DigitalSignalHandler::SetFallingEdgeFilterTime(unsigned long filterTime) {
-    FallingEdgeFilterTime = filterTime;
-    LOG(INFO, LogName, "Falling edge filter set to " + String(filterTime) + " ms");
+void DigitalSignalHandler::SetDeactivationDelay(unsigned long DeactivationDelay) {
+    _DeactivationDelay = DeactivationDelay;
+    LOG(INFO, _LogName, "Deactivation delay set to " + String(_DeactivationDelay) + " ms");
 }
 
 bool DigitalSignalHandler::IsEnabled() const {
-    return Enabled;
+    return _Enabled;
 }
 
-void DigitalSignalHandler::OnRisingEdge(EdgeCallback callback) {
-    RisingEdgeCallback = callback;
+void DigitalSignalHandler::SetActivationCallback(EdgeCallback ActivationCallback) {
+    _ActivationCallback = ActivationCallback;
+    LOG(INFO, _LogName, "ActivationCallback set");
 }
 
-void DigitalSignalHandler::OnFallingEdge(EdgeCallback callback) {
-    FallingEdgeCallback = callback;
+void DigitalSignalHandler::SetDeactivationCallback(EdgeCallback DeactivationCallback) {
+    _DeactivationCallback = DeactivationCallback;
+    LOG(INFO, _LogName, "DeactivationCallback set");
 }
 
 bool DigitalSignalHandler::GetSignal() const {
-    return PreviousInputValue;
+    return _PreviousInputValue;
 }
 
 bool DigitalSignalHandler::GetFilteredSignal() const {
-    return FilteredOutputValue;
+    return _OutputValue;
 }
 
-void DigitalSignalHandler::Update(bool inputValue) {
-    if (!Enabled) {
+void DigitalSignalHandler::Reset() {
+    _Reset = true;
+    return;
+}
+
+void DigitalSignalHandler::Update(bool InputValue) {
+    if (!_Enabled) {
         return;
     }
 
-    unsigned long currentTime = millis();
+    if (_Startup) {
+        _PreviousInputValue = InputValue;
+        _OutputValue = InputValue;
+        _PreviousOutputValue = _OutputValue;
 
-    if (Startup) {
-        PreviousInputValue = inputValue;
-        FilteredOutputValue = inputValue;
+        _Timer = ZERO_TIME;
 
-        if (inputValue) {
-            LastInputValueActiveTime = currentTime;
-            if (RisingEdgeCallback != nullptr) {
-                RisingEdgeCallback();
-            }
-        } else {
-            LastInputValueInactiveTime = currentTime;
-            if (FallingEdgeCallback != nullptr) {
-                FallingEdgeCallback();
-            }
+        LOG(INFO, _LogName, "Startup - Input: " + String(InputValue) + ", Output: " + String(_OutputValue));
+
+        if (InputValue && (_ActivationCallback != nullptr)) {
+            _ActivationCallback();
+        } else if (!InputValue && (_DeactivationCallback != nullptr)) {
+            _DeactivationCallback();
         }
 
-        LOG(INFO, LogName, "Startup - Input: " + String(inputValue) + ", Output: " + String(FilteredOutputValue));
-        Startup = false;
+        _Startup = false;
         return;
     }
 
-    if (inputValue && !PreviousInputValue) {
-        LOG(INFO, LogName, "INPUT Rising edge detected");
-    } else if (!inputValue && PreviousInputValue) {
-        LOG(INFO, LogName, "INPUT Falling edge detected");
+    if (InputValue && !_PreviousInputValue) {
+        LOG(DEBUG, _LogName, "Raw signal activation");
+    } else if (!InputValue && _PreviousInputValue) {
+        LOG(DEBUG, _LogName, "Raw signal deactivation");
+    }
+    _PreviousInputValue = InputValue;
+
+    if (_Reset) {
+        LOG(INFO, _LogName, "Reset");
+        _Timer = ZERO_TIME;
+        _Reset = false;
     }
 
-    PreviousInputValue = inputValue;
+    if (_Timer == ZERO_TIME) {
+        _OutputValue = InputValue;
+    }
 
-    if (inputValue) {
-        LastInputValueActiveTime = currentTime;
-        if (!FilteredOutputValue && ((currentTime - LastInputValueInactiveTime) >= RisingEdgeFilterTime)) {
-            FilteredOutputValue = true;
-            if (RisingEdgeCallback != nullptr) {
-                RisingEdgeCallback();
-            }
-            LOG(INFO, LogName, "OUTPUT Rising edge detected");
-        }
+    if (_Timer > _ClockTime) {
+        _Timer = _Timer - _ClockTime;
     } else {
-        LastInputValueInactiveTime = currentTime;
-        if (FilteredOutputValue && ((currentTime - LastInputValueActiveTime) >= FallingEdgeFilterTime)) {
-            FilteredOutputValue = false;
-            if (FallingEdgeCallback != nullptr) {
-                FallingEdgeCallback();
-            }
-            LOG(INFO, LogName, "OUTPUT Falling edge detected");
+        _Timer = ZERO_TIME;
+    }
+
+    if (_OutputValue == InputValue) {
+        if (InputValue) {
+            _Timer = _DeactivationDelay;
+        } else {
+            _Timer = _ActivationDelay;
         }
     }
+
+    if (_OutputValue && !_PreviousOutputValue) {
+        LOG(INFO, _LogName, "Filtered signal activation");
+        if (_ActivationCallback != nullptr)
+            _ActivationCallback();
+    } else if (!_OutputValue && _PreviousOutputValue) {
+        LOG(INFO, _LogName, "Filtered signal deactivation");
+        if (_DeactivationCallback != nullptr)
+            _DeactivationCallback();
+    }
+    _PreviousOutputValue = _OutputValue;
 }

@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <functional>
 #include <LoggerHandler.h>
+#include <System.h>
 
 typedef void (*EdgeCallback)();
 
@@ -12,43 +13,45 @@ class DigitalSignalHandler {
         DigitalSignalHandler();
         ~DigitalSignalHandler();
 
+        void SetClockTime(unsigned long ClockTime);
         void SetName(String name);
 
         void Enable();
         void Disable();
         bool IsEnabled() const;
 
-        void OnRisingEdge(EdgeCallback callback);
-        void OnFallingEdge(EdgeCallback callback);
+        void SetActivationCallback(EdgeCallback ActivationCallback);
+        void SetDeactivationCallback(EdgeCallback DeactivationCallback);
 
-        void SetRisingEdgeFilterTime(unsigned long filterTime);
-        void SetFallingEdgeFilterTime(unsigned long filterTime);
+        void SetActivationDelay(unsigned long ActivationDelay);
+        void SetDeactivationDelay(unsigned long DeactivationDelay);
 
         bool GetSignal() const;
         bool GetFilteredSignal() const;
 
+        void Reset();
         void Update(bool CurrentValue);
 
     private:
 
-        String LogName = "DigitalSignalHandler";
-        String Name = "";
+        String _LogName = "DigitalSignalHandler";
 
-        bool Enabled = false;
+        bool _Enabled = false;
+        bool _Startup = true;
+        bool _Reset   = true;
 
-        bool PreviousInputValue = false;
-        bool FilteredOutputValue = false;
+        bool _PreviousInputValue = false;
 
-        bool Startup = true;
+        bool _OutputValue = false;
+        bool _PreviousOutputValue = false;
 
-        EdgeCallback RisingEdgeCallback = nullptr;
-        EdgeCallback FallingEdgeCallback = nullptr;
+        EdgeCallback _ActivationCallback   = nullptr;
+        EdgeCallback _DeactivationCallback = nullptr;
 
-        unsigned long RisingEdgeFilterTime;
-        unsigned long FallingEdgeFilterTime;
-
-        unsigned long LastInputValueActiveTime;
-        unsigned long LastInputValueInactiveTime;
+        unsigned long _Timer              = 0;     // milliseconds
+        unsigned long _ClockTime          = 100;   // milliseconds
+        unsigned long _ActivationDelay    = 0;     // milliseconds
+        unsigned long _DeactivationDelay  = 0;     // milliseconds
 
 };
 

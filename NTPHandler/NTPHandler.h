@@ -8,8 +8,34 @@
 typedef void (*TimeSyncCallback)();
 
 class NtpHandler : public DateTimeProvider {
+public:
+    static NtpHandler& GetInstance();
+
+    NtpHandler(const NtpHandler&)            = delete;
+    NtpHandler& operator=(const NtpHandler&) = delete;
+
+    // Configurazione - solo in fase di setup
+    void SetClockTime(unsigned long ClockTime);
+    void SetGmtOffset(int GmtOffsetHours);
+    void SetUpdateInterval(unsigned long IntervalMs);
+    void SetConnectionMaxTime(unsigned long TimeoutMs);
+    void SetOnSyncCallback(TimeSyncCallback Callback);
+    void SetOnDesyncCallback(TimeSyncCallback Callback);
+
+    // Controllo runtime
+    void Enable();
+    void Disable();
+
+    // Diagnostica
+    bool   IsConnected();
+    String GetFormattedTime(const String& Format = "%H:%M:%S") override;
+    unsigned long GetEpochTime();
+
+    // Chiamato ciclicamente
+    void Loop();
+
 private:
-    String LogName = "NtpHandler";
+    NtpHandler();
 
     enum NtpStateEnum {
         NOT_CONNECTED,
@@ -17,35 +43,18 @@ private:
         CONNECTED
     };
 
-    WiFiUDP Udp;
-    NTPClient NtpClient;
-    TaskHandle_t HandlerTaskPointer = nullptr;
-    int HandlerTaskPriority = 4;
-    unsigned long TaskPeriodMs      = 100;   // milliseconds
-    unsigned long ConnectionMaxTime = 10000; // milliseconds
-    unsigned long UpdateInterval    = 60000; // milliseconds
-    unsigned long FiveSeconds       = 5000;  // milliseconds
-    bool Enabled = false;
-    bool Connected = false;
+    String           _LogName             = "NtpHandler";
+    WiFiUDP          _Udp;
+    NTPClient        _NtpClient;
+    bool             _Enabled             = false;
+    bool             _Connected           = false;
+    unsigned long    _ClockTime           = 100;   // milliseconds
+    unsigned long    _ConnectionMaxTime   = 10000; // milliseconds
+    unsigned long    _UpdateInterval      = 60000; // milliseconds
+    unsigned long    _UpdateTimeout       = 5000;  // milliseconds
+    NtpStateEnum     _State               = NOT_CONNECTED;
 
-    TimeSyncCallback OnSyncCallback = nullptr;
-    TimeSyncCallback OnDesyncCallback = nullptr;
+    TimeSyncCallback _OnSyncCallback      = nullptr;
+    TimeSyncCallback _OnDesyncCallback    = nullptr;
 
-    static NtpHandler* StaticInstance;
-
-    NtpHandler();
-    static void HandlerTaskStatic(void *pvParameters);
-    void HandlerTask();
-
-public:
-    static NtpHandler* GetInstance();
-    static void Destroy(); // opzionale, se vuoi gestire deallocazione
-
-    void Enable();
-    void Disable();
-    void SetGmtOffset(int GmtOffsetHours);
-    void SetOnSyncCallback(TimeSyncCallback Callback);
-    void SetOnDesyncCallback(TimeSyncCallback Callback);
-    bool IsConnected();
-    String GetFormattedTime(const String& Format = "%H:%M:%S") override;
 };

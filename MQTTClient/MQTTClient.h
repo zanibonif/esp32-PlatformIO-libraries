@@ -284,10 +284,10 @@ void MQTTClient::HandlerTask(void *pvParameters) {
 
         StartTick = xTaskGetTickCount();
 
-        if ((Timer - ClockTime) < ClockTime) {
-          Timer = ZERO_TIME;
+        if (Timer > ClockTime) {
+            Timer = Timer - ClockTime;
         } else {
-          Timer = Timer - ClockTime;
+            Timer = ZERO_TIME;
         }
         Timeout = (Timer == ZERO_TIME);
 

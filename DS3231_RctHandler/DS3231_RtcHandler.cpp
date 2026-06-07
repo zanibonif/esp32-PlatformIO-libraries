@@ -3,6 +3,7 @@
 DS3231_RtcHandler* DS3231_RtcHandler::StaticInstance = nullptr;
 
 DS3231_RtcHandler::DS3231_RtcHandler() {
+    _Mutex = xSemaphoreCreateMutex();
     Wire.begin();
     if (!Rtc.begin()) {
         LOG(ERROR, LogName, "DS3231 not found");
@@ -58,6 +59,8 @@ DateTime DS3231_RtcHandler::GetDateTime() {
 String DS3231_RtcHandler::GetFormattedTime(const String& format) {
     if (!Enabled) return "RTC Disabled";
 
+    xSemaphoreTake(_Mutex, portMAX_DELAY);
+
     DateTime now = Rtc.now();
     char buffer[64];
 
@@ -70,5 +73,8 @@ String DS3231_RtcHandler::GetFormattedTime(const String& format) {
     timeinfo.tm_sec  = now.second();
 
     strftime(buffer, sizeof(buffer), format.c_str(), &timeinfo);
+
+    xSemaphoreGive(_Mutex);
+
     return String(buffer);
 }

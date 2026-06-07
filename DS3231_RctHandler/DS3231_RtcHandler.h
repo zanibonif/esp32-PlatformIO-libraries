@@ -5,6 +5,7 @@
 #include <RTClib.h>
 #include "LoggerHandler.h"
 #include "DateTimeProvider.h"
+#include "freertos/semphr.h"
 
 class DS3231_RtcHandler : public DateTimeProvider {
 public:
@@ -22,6 +23,8 @@ public:
 private:
     DS3231_RtcHandler();
     ~DS3231_RtcHandler() = default;
+
+    SemaphoreHandle_t _Mutex;
 
     static DS3231_RtcHandler* StaticInstance;
 

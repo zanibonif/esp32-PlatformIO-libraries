@@ -2,68 +2,77 @@
 
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+#include <freertos/semphr.h>
+#include <atomic>
 #include "DateTimeProvider.h"
 
-enum class LogTarget { SerialOnly, WebSerialOnly, Both };
-enum class LogType { Debug, Info, Warning, Error, FatalError };
+// --- Define configurabili ---
+#define LOGGER_FUNCTION_NAME_MAX_LEN  64
+#define LOGGER_MESSAGE_MAX_LEN        192
+#define LOGGER_FORMATTED_MAX_LEN      320
+#define LOGGER_QUEUE_SIZE             100
 
-#define DEBUG         LogType::Debug
-#define INFO          LogType::Info
-#define WARNING       LogType::Warning
-#define ERROR         LogType::Error
-#define FATAL_ERROR   LogType::FatalError
+enum class LogTarget { SerialOnly, WebSerialOnly, Both };
+enum class LogType   { Debug, Info, Warning, Error, FatalError };
+
+#define DEBUG       LogType::Debug
+#define INFO        LogType::Info
+#define WARNING     LogType::Warning
+#define ERROR       LogType::Error
+#define FATAL_ERROR LogType::FatalError
 
 struct LogEntry {
     LogType Type;
-    String FunctionName;
-    String Message;
+    char    FunctionName[LOGGER_FUNCTION_NAME_MAX_LEN];
+    char    Message[LOGGER_MESSAGE_MAX_LEN];
 };
 
-typedef String (*GetTimeFunction)(void*, const String&);
-
 class LoggerHandler {
-    public:
-        static LoggerHandler& Instance();
+public:
+    static LoggerHandler& Instance();
 
-        void SetDateTimeProvider(DateTimeProvider* provider);
-        void SetWebServer(AsyncWebServer* server);
-        void SetWebServerRunning();
-        void SetWebServerNotRunning();
-        void SetSerialSpeed(unsigned long BaudRate);
-        void SetTarget(LogTarget target);
-        void Enable();
-        void Disable();
-        void Log(LogType type, const String& functionName, const String& message);
+    // Configurazione - solo in fase di setup
+    void SetDateTimeProvider(DateTimeProvider* Provider);
+    void SetWebServer(AsyncWebServer* Server);
+    void SetSerialSpeed(unsigned long BaudRate);
+    void SetTarget(LogTarget Target);
+    void SetMaxMessagesPerCycle(int MaxMessages);
 
-    private:
-        LoggerHandler();
+    // Controllo runtime
+    void Enable();
+    void Disable();
+    void SetWebServerRunning();
+    void SetWebServerNotRunning();
 
-        DateTimeProvider* TimeProvider = nullptr;
+    // Logging
+    void Log(LogType Type, const String& FunctionName, const String& Message);
+    void LogFromISR(LogType Type, const char* FunctionName, const char* Message);
 
-        static void LoggerTask(void* pvParams);
-        static void WebSerialServiceTask(void* pvParams);
-        String FormatLog(const LogEntry& entry);
+    // Chiamato ciclicamente
+    void Loop();
 
-        SemaphoreHandle_t WebSerialSemaphore;
-        unsigned long WebSerialSemaphoreMaxTime = 100; // ms
+private:
+    LoggerHandler();
 
-        int LoggerTaskPriority = 1;
-        unsigned long LoggerTaskDelay = 20; // ms
+    void _FormatLog(const LogEntry& Entry, char* Buffer, size_t BufferSize);
+    void _PublishLog(const char* FormattedText);
 
-        int WebSerialServiceTaskPriority = 1;
+    DateTimeProvider*  _TimeProvider            = nullptr;
+    AsyncWebServer*    _WebServer               = nullptr;
+    bool               _WebServerRunning        = false;
+    LogTarget          _Target                  = LogTarget::SerialOnly;
+    bool               _LogEnabled              = true;
+    int                _MaxMessagesPerCycle     = 50;
 
-        int LoggerQueueSize = 100;
+    unsigned long      _WebSerialSemaphoreMaxTime = 100;
 
-        unsigned long WebSerialServiceTaskPeriod = 200;
+    QueueHandle_t      _LogQueue;
+    SemaphoreHandle_t  _WebSerialSemaphore;
 
-        AsyncWebServer* WebServer;
-        bool WebServerRunning;
-        LogTarget Target;
-        bool LogEnabled;
-
-        QueueHandle_t LogQueue;
-        TaskHandle_t LoggerTaskHandle;
-        TaskHandle_t WebSerialServiceTaskHandle;
+    std::atomic<int>   _DroppedMessages{0};
 };
 
 #define LOG(Type, FunctionName, Message) LoggerHandler::Instance().Log(Type, FunctionName, Message)
+#define LOG_ISR(Type, FunctionName, Message) LoggerHandler::Instance().LogFromISR(Type, FunctionName, Message)

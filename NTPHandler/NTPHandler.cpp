@@ -1,139 +1,126 @@
 #include "NtpHandler.h"
 #include "LoggerHandler.h"
 
-NtpHandler* NtpHandler::StaticInstance = nullptr;
+NtpHandler& NtpHandler::GetInstance() {
+    static NtpHandler Instance;
+    return Instance;
+}
 
 NtpHandler::NtpHandler()
-    : NtpClient(Udp, "pool.ntp.org", 0, 60000) {
-    LOG(INFO, LogName, "Instance created");
-    xTaskCreatePinnedToCore(HandlerTaskStatic, "Ntp_HandlerTask", 8192, this, HandlerTaskPriority, &HandlerTaskPointer, 1);
-    LOG(INFO, LogName, "Handler task created");
+    : _NtpClient(_Udp, "pool.ntp.org", 0, 60000) {
+    LOG(INFO, _LogName, "Istanza creata");
 }
 
-NtpHandler* NtpHandler::GetInstance() {
-    if (StaticInstance == nullptr) {
-        StaticInstance = new NtpHandler();
-    }
-    return StaticInstance;
-}
-
-void NtpHandler::Destroy() {
-    if (StaticInstance) {
-        delete StaticInstance;
-        StaticInstance = nullptr;
-    }
-}
-
-void NtpHandler::Enable() {
-    Enabled = true;
-    LOG(INFO, LogName, "Enabled");
-}
-
-void NtpHandler::Disable() {
-    Enabled = false;
-    LOG(INFO, LogName, "Disabled");
-}
-
-bool NtpHandler::IsConnected() {
-    return Connected;
+void NtpHandler::SetClockTime(unsigned long ClockTime) {
+    _ClockTime = ClockTime;
+    LOG(INFO, _LogName, "ClockTime set to " + String (_ClockTime) + " ms");
 }
 
 void NtpHandler::SetGmtOffset(int GmtOffsetHours) {
-    NtpClient.setTimeOffset(GmtOffsetHours * 3600);
-    LOG(INFO, LogName, "GMT offset set to " + String(GmtOffsetHours) + " hours");
+    _NtpClient.setTimeOffset(GmtOffsetHours * 3600);
+    LOG(INFO, _LogName, "GMT offset impostato a " + String(GmtOffsetHours) + " ore");
+}
+
+void NtpHandler::SetConnectionMaxTime(unsigned long TimeoutMs) {
+    _ConnectionMaxTime = TimeoutMs;
+    LOG(INFO, _LogName, "ConnectionMaxTime impostato a " + String(_ConnectionMaxTime) + " ms");
 }
 
 void NtpHandler::SetOnSyncCallback(TimeSyncCallback Callback) {
-    OnSyncCallback = Callback;
+    _OnSyncCallback = Callback;
+    LOG(INFO, _LogName, "Sync callback impostata");
 }
 
 void NtpHandler::SetOnDesyncCallback(TimeSyncCallback Callback) {
-    OnDesyncCallback = Callback;
+    _OnDesyncCallback = Callback;
+    LOG(INFO, _LogName, "Desync callback impostata");
+}
+
+void NtpHandler::Enable() {
+    _Enabled = true;
+    LOG(INFO, _LogName, "Abilitato");
+}
+
+void NtpHandler::Disable() {
+    _Enabled = false;
+    LOG(INFO, _LogName, "Disabilitato");
+}
+
+bool NtpHandler::IsConnected() {
+    return _Connected;
 }
 
 String NtpHandler::GetFormattedTime(const String& Format) {
-    unsigned long RawTime = NtpClient.getEpochTime();
-    struct tm* TimeInfo = localtime(reinterpret_cast<time_t*>(&RawTime));
+    unsigned long RawTime = _NtpClient.getEpochTime();
+    time_t Time = static_cast<time_t>(RawTime);
+    struct tm TimeInfo;
+    localtime_r(&Time, &TimeInfo);
     char Buffer[64];
-    strftime(Buffer, sizeof(Buffer), Format.c_str(), TimeInfo);
+    strftime(Buffer, sizeof(Buffer), Format.c_str(), &TimeInfo);
     return String(Buffer);
 }
 
-void NtpHandler::HandlerTaskStatic(void* pvParameters) {
-    NtpHandler* instance = reinterpret_cast<NtpHandler*>(pvParameters);
-    instance->HandlerTask();
+unsigned long NtpHandler::GetEpochTime() {
+    return _NtpClient.getEpochTime();
 }
 
-void NtpHandler::HandlerTask() {
-    TickType_t StartTick, ExecutionTick, TaskTickPeriod;
-    TaskTickPeriod = TaskPeriodMs / portTICK_PERIOD_MS;
+void NtpHandler::Loop() {
 
     static unsigned long Timer = ZERO_TIME;
-    static unsigned long ClockTime = TaskPeriodMs;
     bool Timeout;
 
-    NtpStateEnum State = NOT_CONNECTED;
-
-    while (true) {
-        StartTick = xTaskGetTickCount();
-
-        if ((Timer - ClockTime) < ClockTime) {
-            Timer = ZERO_TIME;
-        } else {
-            Timer -= ClockTime;
-        }
-        Timeout = (Timer == ZERO_TIME);
-
-        switch (State) {
-            case NOT_CONNECTED:
-                if (Enabled) {
-                    NtpClient.setUpdateInterval(UpdateInterval);
-                    NtpClient.begin();
-                    LOG(INFO, LogName, "Time sync starting");
-                    Timer = ConnectionMaxTime;
-                    State = CONNECTION_IN_PROGRESS;
-                }
-                break;
-
-            case CONNECTION_IN_PROGRESS:
-                if (Timeout) {
-                    LOG(WARNING, LogName, "Time sync timeout");
-                    NtpClient.end();
-                    State = NOT_CONNECTED;
-                } else if (!Enabled) {
-                    LOG(INFO, LogName, "Time sync stopping");
-                    NtpClient.end();
-                    State = NOT_CONNECTED;
-                } else if (NtpClient.forceUpdate()) {
-                    LOG(INFO, LogName, "Time synchronized: current date and time is " + GetFormattedTime("%d/%m/%Y %H:%M:%S"));
-                    if (OnSyncCallback) OnSyncCallback();
-                    Timer = UpdateInterval + FiveSeconds;
-                    State = CONNECTED;
-                }
-                break;
-
-            case CONNECTED:
-                if (!Enabled) {
-                    if (OnDesyncCallback) OnDesyncCallback();
-                    NtpClient.end();
-                    LOG(INFO, LogName, "Time sync stopped");
-                    State = NOT_CONNECTED;
-                } else if (Timeout) {
-                    LOG(WARNING, LogName, "Time synchronization lost");
-                    if (OnDesyncCallback) OnDesyncCallback();
-                    NtpClient.end();
-                    State = NOT_CONNECTED;
-                } else if (NtpClient.update()) {
-                    Timer = UpdateInterval + FiveSeconds;
-                }
-                break;
-        }
-
-        Connected = (State == CONNECTED);
-
-        ExecutionTick = xTaskGetTickCount() - StartTick;
-        if (ExecutionTick < TaskTickPeriod) {
-            vTaskDelay(TaskTickPeriod - ExecutionTick);
-        }
+    if (Timer > _ClockTime) {
+        Timer = Timer - _ClockTime;
+    } else {
+        Timer = ZERO_TIME;
     }
+    Timeout = (Timer == ZERO_TIME);
+
+    switch (_State) {
+        case NOT_CONNECTED:
+            if (_Enabled) {
+                _NtpClient.begin();
+                _NtpClient.setUpdateInterval(_UpdateInterval);
+                LOG(INFO, _LogName, "Sincronizzazione tempo in corso...");
+                Timer = _ConnectionMaxTime;
+                _State = CONNECTION_IN_PROGRESS;
+            }
+            break;
+
+        case CONNECTION_IN_PROGRESS:
+            if (!_Enabled) {
+                LOG(INFO, _LogName, "Sincronizzazione interrotta");
+                _NtpClient.end();
+                _State = NOT_CONNECTED;
+            } else if (_NtpClient.forceUpdate()) {
+                LOG(INFO, _LogName, "Tempo sincronizzato: " + GetFormattedTime("%d/%m/%Y %H:%M:%S"));
+                if (_OnSyncCallback) _OnSyncCallback();
+                Timer = _UpdateInterval + _UpdateTimeout;
+                _State = CONNECTED;
+            } else if (Timeout) {
+                LOG(WARNING, _LogName, "Timeout sincronizzazione");
+                _NtpClient.end();
+                _State = NOT_CONNECTED;
+            }
+            break;
+
+        case CONNECTED:
+            if (!_Enabled) {
+                if (_OnDesyncCallback) _OnDesyncCallback();
+                _NtpClient.end();
+                LOG(INFO, _LogName, "Sincronizzazione fermata");
+                _State = NOT_CONNECTED;
+            } else if (_NtpClient.update()) {
+                LOG(DEBUG, _LogName, "Tempo aggiornato: " + GetFormattedTime("%d/%m/%Y %H:%M:%S"));
+                Timer = _UpdateInterval + _UpdateTimeout;
+            } else if (Timeout) {
+                LOG(WARNING, _LogName, "Timeout aggiornamento NTP - sincronizzazione persa");
+                if (_OnDesyncCallback) _OnDesyncCallback();
+                _NtpClient.end();
+                _State = NOT_CONNECTED;
+            }
+            break;
+    }
+
+    _Connected = (_State == CONNECTED);
 }
