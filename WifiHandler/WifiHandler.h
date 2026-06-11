@@ -5,6 +5,7 @@
 
 typedef void (*ConnectionCallback)();
 typedef void (*DisconnectionCallback)();
+typedef void (*APCallback)();
 
 class WifiHandler {
 public:
@@ -12,7 +13,7 @@ public:
     WifiHandler (const WifiHandler&)            = delete;
     WifiHandler& operator= (const WifiHandler&) = delete;
 
-    // Configurazione
+    // Configurazione STA
     void SetClockTime (unsigned long ClockTime);
     void SetHostname (const String& Hostname);
     void SetSSIDAndPassword (const String& Ssid, const String& Password);
@@ -22,14 +23,23 @@ public:
     void SetOnConnectedCallback (ConnectionCallback Callback);
     void SetOnDisconnectedCallback (DisconnectionCallback Callback);
 
+    // Configurazione AP fallback
+    void SetAPCredentials (const String& SSID, const String& Password = "");
+    void EnableAPFallback ();
+    void DisableAPFallback ();
+    void SetAPRetryInterval (unsigned long IntervalMs);
+    void SetOnAPStartedCallback (APCallback Callback);
+
     // Controllo runtime
     void Enable ();
     void Disable ();
 
     // Diagnostica
     bool   IsConnected ();
+    bool   IsAPMode ();
     int    GetSignalStrength ();
     String GetIPAddress ();
+    String GetAPIPAddress ();
 
     // Chiamato ciclicamente
     void Loop ();
@@ -42,24 +52,33 @@ private:
         CONNECTION_IN_PROGRESS,
         POST_CONNECTION_DELAY,
         CONNECTED,
-        DISCONNECTION_IN_PROGRESS
+        DISCONNECTION_IN_PROGRESS,
+        AP_MODE,
+        AP_STA_RETRY
     };
 
-    String                _LogName                = "WifiHandler";
-    bool                  _Enabled                = false;
-    String                _Hostname               = "UndefinedHostname";
-    String                _SSID                   = "";
-    String                _Password               = "";
+    String                _LogName                  = "WifiHandler";
+    bool                  _Enabled                  = false;
+    String                _Hostname                 = "UndefinedHostname";
+    String                _SSID                     = "";
+    String                _Password                 = "";
 
-    unsigned long         _ClockTime              = 100;   // milliseconds
-    unsigned long         _PostConnectionDelay    = 5000;  // milliseconds
-    unsigned long         _ConnectionMaxTime      = 20000; // milliseconds
-    unsigned long         _DisconnectionMaxTime   = 20000; // milliseconds
+    unsigned long         _ClockTime                = 100;   // milliseconds
+    unsigned long         _PostConnectionDelay      = 5000;  // milliseconds
+    unsigned long         _ConnectionMaxTime        = 20000; // milliseconds
+    unsigned long         _DisconnectionMaxTime     = 20000; // milliseconds
 
-    WifiState             _State                  = NOT_CONNECTED;
+    bool                  _APFallbackEnabled        = false;
+    String                _APSSID                   = "ESP32-AP";
+    String                _APPassword               = "123456";
+    unsigned long         _APRetryInterval          = 300000; // milliseconds
 
-    ConnectionCallback    _OnConnectedCallback    = nullptr;
-    DisconnectionCallback _OnDisconnectedCallback = nullptr;
+    WifiState             _State                    = NOT_CONNECTED;
+    bool                  _RestartConnectionRequest = false;
+
+    ConnectionCallback    _OnConnectedCallback      = nullptr;
+    DisconnectionCallback _OnDisconnectedCallback   = nullptr;
+    APCallback            _OnAPStartedCallback      = nullptr;
 };
 
 extern WifiHandler& Wifi;

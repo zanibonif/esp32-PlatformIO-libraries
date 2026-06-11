@@ -68,6 +68,7 @@ private:
     AsyncWebServer*    _WebServer                 = nullptr;
     bool               _WebServerRunning          = false;
     bool               _WebSerialEnabled          = false;
+    bool               _WebSerialBeginDone        = false;
     bool               _LogEnabled                = true;
     int                _MaxMessagesPerCycle       = 50;
 
@@ -81,5 +82,5 @@ private:
 
 extern LoggerHandler& Logger;
 
-#define LOG(Type, FunctionName, Message)     Logger.Log(Type, FunctionName, Message)
-#define LOG_ISR(Type, FunctionName, Message) Logger.LogFromISR(Type, FunctionName, Message)
+#define LOG(Type, FunctionName, Message)     LoggerHandler::GetInstance().Log(Type, FunctionName, Message)
+#define LOG_ISR(Type, FunctionName, Message) LoggerHandler::GetInstance().LogFromISR(Type, FunctionName, Message)

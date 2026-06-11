@@ -12,20 +12,29 @@ Il nucleo del sistema è il **DMPOScheduler**: uno scheduler FreeRTOS a cui veng
 
 | Libreria | Stato |
 |---|---|
-| DMPOScheduler | ✅ omogenizzato |
-| LoggerHandler | ✅ omogenizzato |
-| System | ✅ omogenizzato |
-| WebServerHandler | ✅ omogenizzato |
-| DateTimeProvider | ✅ omogenizzato |
-| NtpHandler | ✅ omogenizzato |
-| WifiHandler | ✅ omogenizzato |
-| DigitalSignalHandler | ✅ omogenizzato |
-| DS3231_RtcHandler | ✅ omogenizzato |
-| AnalogInputHandler | ✅ omogenizzato |
-| CommandOtaHandler | ✅ omogenizzato |
-| MQTTClient | ✅ omogenizzato |
-| LittleFSHandler | Singleton ref OK, manca extern alias, header-only |
-| TimeDiscreteFilter | ✅ omogenizzato |
+| DMPOScheduler | ✅ omogenizzato 📄 |
+| LoggerHandler | ✅ omogenizzato 📄 |
+| System | ✅ omogenizzato 📄 |
+| WebServerHandler | ✅ omogenizzato 📄 |
+| DateTimeProvider | ✅ omogenizzato 📄 |
+| NtpHandler | ✅ omogenizzato 📄 |
+| WifiHandler | ✅ omogenizzato 📄 — AP fallback integrato nella state machine |
+| DigitalSignalHandler | ✅ omogenizzato 📄 |
+| DS3231_RtcHandler | ✅ omogenizzato 📄 |
+| I2cBusHandler | ✅ omogenizzato 📄 |
+| AnalogInputHandler | ✅ omogenizzato 📄 |
+| CommandOtaHandler | ✅ omogenizzato 📄 |
+| MQTTClient | ✅ omogenizzato 📄 |
+| LittleFSHandler | ✅ omogenizzato 📄 |
+| TimeDiscreteFilter | ✅ omogenizzato 📄 |
+
+---
+
+## Documentazione librerie
+
+Ogni libreria ha un `README.md` nella propria cartella con alias globale, dipendenze, snippet di setup/wiring e controllo runtime. Le librerie documentate sono indicate con 📄 nella tabella sopra.
+
+Per i pattern di interazione tra librerie (ordine di init, WiFi come driver, catena NTP→RTC→Logger, struttura task) vedere **[INTERACTIONS.md](INTERACTIONS.md)**.
 
 ---
 
@@ -71,6 +80,12 @@ MyClass& MyAlias = MyClass::GetInstance();
 - Extern alias per uso comodo nel codice applicativo (`Scheduler`, `Logger`, ecc.)
 - NO singleton a puntatore con `Destroy()`
 
+### LOG nei costruttori e SIOF
+
+Il macro `LOG` usa `LoggerHandler::GetInstance()` internamente. Chiamarlo nel costruttore di una libreria singleton è **sicuro e corretto**: il Logger viene creato on-demand alla prima chiamata, prima ancora che il costruttore termini.
+
+Non usare mai `Logger.Log(...)` direttamente — il riferimento alias `Logger` può essere null durante `do_global_ctors` se la translation unit di `LoggerHandler.cpp` viene linkata dopo quella della libreria che chiama LOG.
+
 ### Pattern Timer (no millis)
 
 Mai usare `millis()`. I timer si implementano per sottrazione del `_ClockTime`:
@@ -93,6 +108,43 @@ Le librerie **non** creano task FreeRTOS in autonomia. Espongono:
 - `Update(valore)` per aggiornamenti event-driven
 
 Questi metodi vengono agganciati al DMPOScheduler dal codice applicativo.
+
+### Enable/Disable idempotenti
+
+`Enable()` esce subito se la libreria è già abilitata; `Disable()` esce subito se è già disabilitata. Niente log né side-effect quando lo stato non cambia. Evita doppie inizializzazioni hardware (es. doppio `Wire.begin()`), ri-scatti delle callback dei `DigitalSignalHandler` interni (la loro `Enable()` rimette `_Startup = true`) e log fuorvianti.
+
+```cpp
+void MyClass::Enable () {
+    if (_Enabled) return;
+    // ... inizializzazione e _Enabled = true
+}
+
+void MyClass::Disable () {
+    if (!_Enabled) return;
+    // ... _Enabled = false e spegnimento
+}
+```
+
+### Enable/Disable leggeri (flag-only)
+
+Oltre a essere idempotenti, `Enable()` e `Disable()` si limitano a settare il flag di stato (più eventuale LOG). Tutto il lavoro vero — inizializzazione hardware, registrazioni, transazioni, scritture GPIO — avviene nel `Loop()` (o nella loop lenta della libreria) al rilevamento del cambio di stato, o alla prima iterazione da abilitato. Motivo: Enable/Disable possono essere chiamate da callback o da task veloci e non devono mai bloccare né accedere all'hardware dal contesto del chiamante.
+
+```cpp
+void MyClass::Enable ()  { if (_Enabled)  return; _Enabled = true;  }
+void MyClass::Disable () { if (!_Enabled) return; _Enabled = false; }
+
+void MyClass::Loop () {
+    if (_Enabled != _PreviousEnabled) {
+        if (_Enabled) { /* inizializzazione / accensione */ }
+        else          { /* spegnimento */ }
+        _PreviousEnabled = _Enabled;
+    }
+    if (!_Enabled) return;
+    // ... lavoro ciclico
+}
+```
+
+Le operazioni di configurazione nei metodi `Set*` (pinMode, registrazioni, parametri) restano ammesse: girano nella fase di setup.
 
 ### Multi-target con booleani indipendenti
 

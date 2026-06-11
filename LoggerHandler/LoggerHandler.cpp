@@ -46,6 +46,11 @@ void LoggerHandler::SetWebServer (AsyncWebServer* Server)
 
 void LoggerHandler::SetWebServerRunning ()
 {
+    if (_WebSerialEnabled && _WebServer && !_WebSerialBeginDone)
+    {
+        WebSerial.begin(_WebServer);
+        _WebSerialBeginDone = true;
+    }
     _WebServerRunning = true;
 }
 
@@ -78,8 +83,11 @@ void LoggerHandler::DisableSerial ()
 
 void LoggerHandler::EnableWebSerial ()
 {
-    if (_WebServer)
+    if (_WebServer && !_WebSerialBeginDone)
+    {
         WebSerial.begin(_WebServer);
+        _WebSerialBeginDone = true;
+    }
     _WebSerialEnabled = true;
 }
 
@@ -144,7 +152,7 @@ void LoggerHandler::_PublishLog (const char* FormattedText)
         Serial.println(FormattedText);
     }
 
-    if (_WebSerialEnabled && _WebServer && _WebServerRunning)
+    if (_WebSerialEnabled && _WebSerialBeginDone && _WebServer && _WebServerRunning)
     {
         if (xSemaphoreTake(_WebSerialSemaphore, pdMS_TO_TICKS(_WebSerialSemaphoreMaxTime)) == pdTRUE)
         {
@@ -183,7 +191,7 @@ void LoggerHandler::Loop ()
         ProcessedMessages++;
     }
 
-    if (_WebSerialEnabled && _WebServer && _WebServerRunning)
+    if (_WebSerialEnabled && _WebSerialBeginDone && _WebServer && _WebServerRunning)
     {
         if (xSemaphoreTake(_WebSerialSemaphore, pdMS_TO_TICKS(_WebSerialSemaphoreMaxTime)) == pdTRUE)
         {
