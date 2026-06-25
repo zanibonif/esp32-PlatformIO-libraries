@@ -46,7 +46,7 @@ NtpTask.AppCritical = false;
 NtpTask.StackSize   = 4096;
 NtpTask.DeadlineUs  = 60000000;   // deadline tollerante: Loop() può bloccare ~1 s
 Scheduler.AddTask(NtpTask);
-Scheduler.AddFunction(NtpTask.ID, []() { Ntp.Loop(); });
+Scheduler.AddFunction(NtpTask, []() { Ntp.Loop(); });
 
 Ntp.SetClockTime(100);   // ms — deve corrispondere a PeriodUs / 1000
 ```

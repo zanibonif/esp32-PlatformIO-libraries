@@ -42,7 +42,7 @@ Se i pin non sono configurati, `Loop()` non gira e logga una sola volta.
 Il probe è veloce con dispositivo assente (NACK immediato) ma un bus fisicamente bloccato può causare timeout: la `Loop()` va nel task **low-rate**, mai in quello high-rate.
 
 ```cpp
-Scheduler.AddFunction(LowRateTaskConfiguration.ID, []() { I2cBus.Loop(); });
+Scheduler.AddFunction(LowRateTaskConfiguration, []() { I2cBus.Loop(); });
 
 I2cBus.SetClockTime(100);   // ms — deve corrispondere al PeriodUs del task / 1000
 ```

@@ -7,16 +7,20 @@ Pattern ricorrenti di wiring tra le librerie. Da usare come riferimento per il c
 ## Sequenza di inizializzazione tipica in setup()
 
 ```
-1. Logger          → SetSerialSpeed, Enable
-2. System          → SetCpuFrequency
-3. I2cBusHandler   → SetSdaPin/SetSclPin, SetClockTime, Enable
-4. DS3231_RtcHandler → Enable   // registrato su I2cBus (0x68) alla costruzione
-5. Logger          → SetDateTimeProvider(&Rtc)   // timestamp da RTC da subito
-6. WifiHandler     → configurazione + Enable
-7. NtpHandler      → configurazione (senza Enable — lo farà WiFi)
-8. DMPOScheduler   → AddTask + AddFunction per ogni task
-9. Scheduler.Begin()
+1.  Logger             → SetSerialSpeed, Enable
+2.  LittleFSHandler    → Init()                       // obbligatorio prima di ParametersHandler
+3.  ParametersHandler  → SetClockTime, AddFile, AddParameter, Begin()
+4.  System             → SetCpuFrequency
+5.  WifiHandler        → SetSSIDAndPassword (letti da Parameters) + Enable
+6.  NtpHandler         → configurazione (senza Enable — lo farà WiFi)
+7.  I2cBusHandler      → SetSdaPin/SetSclPin, SetClockTime, Enable
+8.  DS3231_RtcHandler  → Enable   // registrato su I2cBus (0x68) alla costruzione
+9.  Logger             → SetDateTimeProvider(&Rtc)   // timestamp da RTC da subito
+10. DMPOScheduler      → AddTask + AddFunction per ogni task
+11. Scheduler.Begin()
 ```
+
+`ParametersHandler` va prima di `WifiHandler` perché le credenziali WiFi si leggono da `Parameters.Get(WIFI_SSID)` prima di `Wifi.Enable()`.
 
 `I2cBusHandler` è l'**unico punto del sistema** che chiama `Wire.begin()` (lo fa la `Loop()` al primo ciclo da abilitato): nessun'altra libreria o codice applicativo deve inizializzare il bus. La `I2cBus.Loop()` (init + probe di disponibilità) va agganciata al task **low-rate**.
 
@@ -37,10 +41,16 @@ WiFi notifica gli altri servizi tramite callback. I servizi dipendenti dal WiFi 
 ```cpp
 Wifi.SetOnConnectedCallback([]() {
     WebServer.Start();
+    FileManager.Begin(WebServer.GetServer());   // idempotente — sicuro anche se già chiamato da OnAPStarted
     Logger.SetWebServer(WebServer.GetServer());
     Logger.SetWebServerRunning();
     Logger.EnableWebSerial();
     Ntp.Enable();
+});
+
+Wifi.SetOnAPStartedCallback([]() {
+    WebServer.Start();
+    FileManager.Begin(WebServer.GetServer());   // file manager disponibile anche in modalità AP
 });
 
 Wifi.SetOnDisconnectedCallback([]() {
@@ -87,10 +97,10 @@ Logger usa Rtc.GetFormattedTime() per i timestamp (online e offline)
 Pattern a fasce di frequenza, con task APERIODIC per Logger e operazioni non critiche:
 
 ```cpp
-// HIGH_RATE  — 10ms  — I/O veloci, sensori, segnali digitali
+// HIGH_RATE   — 10ms  — I/O veloci, sensori, segnali digitali
 // MEDIUM_RATE — 50ms  — elaborazioni intermedie
-// LOW_RATE   — 100ms — I2cBus.Loop(), Rtc.Loop(), WiFi.Loop(), Mqtt.Loop(), Ota.Loop()
-// APERIODIC  — 200ms con deadline 60s — Logger.Loop(), Ntp.Loop() (può bloccare ~1s), diagnostica
+// LOW_RATE    — 100ms — Parameters.Loop(), I2cBus.Loop(), Rtc.Loop(), WiFi.Loop(), Mqtt.Loop(), Ota.Loop()
+// APERIODIC   — 200ms con deadline 60s — Logger.Loop(), Ntp.Loop() (può bloccare ~1s), diagnostica
 
 DMPOScheduler::TaskConfig LowRateTask;
 LowRateTask.Name        = "LOW_RATE_TASK";
@@ -99,7 +109,7 @@ LowRateTask.DeadlineUs  = 100000;
 LowRateTask.AppCritical = false;
 LowRateTask.StackSize   = 4096;
 Scheduler.AddTask(LowRateTask);
-Scheduler.AddFunction(LowRateTask.ID, []() { Wifi.Loop(); });
+Scheduler.AddFunction(LowRateTask, []() { Wifi.Loop(); });
 
 DMPOScheduler::TaskConfig AperiodicTask;
 AperiodicTask.Name        = "APERIODIC_TASK";
@@ -108,8 +118,8 @@ AperiodicTask.DeadlineUs  = 60000000;   // deadline 60s → priorità bassa
 AperiodicTask.AppCritical = false;
 AperiodicTask.StackSize   = 4096;
 Scheduler.AddTask(AperiodicTask);
-Scheduler.AddFunction(AperiodicTask.ID, []() { Ntp.Loop(); });      // può bloccare ~1s in sync (vedi README NtpHandler)
-Scheduler.AddFunction(AperiodicTask.ID, []() { Logger.Loop(); });
+Scheduler.AddFunction(AperiodicTask, []() { Ntp.Loop(); });      // può bloccare ~1s in sync (vedi README NtpHandler)
+Scheduler.AddFunction(AperiodicTask, []() { Logger.Loop(); });
 ```
 
 Regola generale: le `Loop()` che possono bloccare (Ntp in sincronizzazione, Radar in configurazione, ecc.) vanno nel task **aperiodico** con deadline tollerante; i getter delle librerie devono invece essere sempre non bloccanti (lettura di cache aggiornata dalla Loop — vedi DS3231_RtcHandler e NTPClient).
@@ -119,6 +129,39 @@ Regola generale: le `Loop()` che possono bloccare (Ntp in sincronizzazione, Rada
 ```cpp
 Wifi.SetClockTime(LowRateTask.PeriodUs / MILLISECONDS_TO_MICROSECONDS);    // 100ms
 Ntp.SetClockTime(AperiodicTask.PeriodUs / MILLISECONDS_TO_MICROSECONDS);   // 200ms
+```
+
+---
+
+## ParametersHandler — init e task
+
+`ParametersHandler` va inizializzato in `setup()` prima di qualunque libreria che legga da esso (es. WiFi):
+
+```cpp
+Parameters.SetClockTime(LOW_RATE_TASK_PERIOD / MILLISECONDS_TO_MICROSECONDS);
+
+ParametersHandler::FileConfig ConfigFile;
+ConfigFile.Path = "/data/configurations.csv";
+Parameters.AddFile(ConfigFile);
+Parameters.AddParameter(WIFI_SSID, "WiFi SSID", "default", ConfigFile);
+
+Parameters.Begin();   // carica + salva subito (persiste i nuovi parametri)
+
+Wifi.SetSSIDAndPassword(Parameters.Get(WIFI_SSID), Parameters.Get(WIFI_PASSWORD));
+Wifi.Enable();
+```
+
+`Loop()` va nel task **low-rate** (stesso task di I2cBus e Rtc):
+
+```cpp
+Scheduler.AddFunction(LowRateTask, []() { Parameters.Loop(); });
+```
+
+Prima di un reboot o OTA, forzare la scrittura dei file pendenti:
+
+```cpp
+Parameters.ForceWrite();
+ESP.restart();
 ```
 
 ---
@@ -157,7 +200,7 @@ ButtonA.SetActivationCallback([]() { /* fronte salita */ });
 ButtonA.Enable();
 
 // nel task
-Scheduler.AddFunction(HighRateTask.ID, []() {
+Scheduler.AddFunction(HighRateTask, []() {
     ButtonA.Update(digitalRead(PIN_BUTTON));
 });
 ```

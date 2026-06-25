@@ -35,7 +35,7 @@ public:
 
     // Configurazione
     int  AddTask     (TaskConfig& Config);
-    bool AddFunction (int TaskID, TaskFunction Fn);
+    bool AddFunction (TaskConfig& Config, TaskFunction Fn);
 
     // Avvio
     bool Begin ();

@@ -44,7 +44,7 @@ void I2cBusHandler::SetClockTime (unsigned long ClockTime)
     _ClockTime = ClockTime;
     for (int Index = 0; Index < I2C_BUS_HANDLER_MAX_DEVICES; Index++) {
         if (_Devices[Index].Used) {
-            _Devices[Index].Signal.SetClockTime(_ClockTime);
+            _Devices[Index].DeviceAvailableSignal.SetClockTime(_ClockTime);
         }
     }
 }
@@ -62,11 +62,11 @@ void I2cBusHandler::AddDevice (uint8_t Address, const String& Name)
         if (!_Devices[Index].Used) {
             _Devices[Index].Used    = true;
             _Devices[Index].Address = Address;
-            _Devices[Index].Signal.SetName(Name + " (0x" + String(Address, HEX) + ")");
-            _Devices[Index].Signal.SetClockTime(_ClockTime);
-            _Devices[Index].Signal.SetActivationDelay(I2C_BUS_HANDLER_DEFAULT_AVAILABLE_DELAY);
-            _Devices[Index].Signal.SetDeactivationDelay(0);
-            _Devices[Index].Signal.Enable();
+            _Devices[Index].DeviceAvailableSignal.SetName(Name + " (0x" + String(Address, HEX) + ") available ");
+            _Devices[Index].DeviceAvailableSignal.SetClockTime(_ClockTime);
+            _Devices[Index].DeviceAvailableSignal.SetActivationDelay(I2C_BUS_HANDLER_DEFAULT_AVAILABLE_DELAY);
+            _Devices[Index].DeviceAvailableSignal.SetDeactivationDelay(0);
+            _Devices[Index].DeviceAvailableSignal.Enable();
             LOG(INFO, "I2cBusHandler", "Dispositivo " + Name + " registrato a 0x" + String(Address, HEX));
             return;
         }
@@ -82,7 +82,7 @@ void I2cBusHandler::SetAvailableCallback (uint8_t Address, EdgeCallback Callback
         LOG(ERROR, "I2cBusHandler", "SetAvailableCallback: dispositivo 0x" + String(Address, HEX) + " non registrato");
         return;
     }
-    _Devices[Index].Signal.SetActivationCallback(Callback);
+    _Devices[Index].DeviceAvailableSignal.SetActivationCallback(Callback);
 }
 
 void I2cBusHandler::SetUnavailableCallback (uint8_t Address, EdgeCallback Callback)
@@ -92,7 +92,7 @@ void I2cBusHandler::SetUnavailableCallback (uint8_t Address, EdgeCallback Callba
         LOG(ERROR, "I2cBusHandler", "SetUnavailableCallback: dispositivo 0x" + String(Address, HEX) + " non registrato");
         return;
     }
-    _Devices[Index].Signal.SetDeactivationCallback(Callback);
+    _Devices[Index].DeviceAvailableSignal.SetDeactivationCallback(Callback);
 }
 
 void I2cBusHandler::SetAvailableDelay (uint8_t Address, unsigned long Delay)
@@ -102,7 +102,7 @@ void I2cBusHandler::SetAvailableDelay (uint8_t Address, unsigned long Delay)
         LOG(ERROR, "I2cBusHandler", "SetAvailableDelay: dispositivo 0x" + String(Address, HEX) + " non registrato");
         return;
     }
-    _Devices[Index].Signal.SetActivationDelay(Delay);
+    _Devices[Index].DeviceAvailableSignal.SetActivationDelay(Delay);
 }
 
 void I2cBusHandler::SetUnavailableDelay (uint8_t Address, unsigned long Delay)
@@ -112,7 +112,7 @@ void I2cBusHandler::SetUnavailableDelay (uint8_t Address, unsigned long Delay)
         LOG(ERROR, "I2cBusHandler", "SetUnavailableDelay: dispositivo 0x" + String(Address, HEX) + " non registrato");
         return;
     }
-    _Devices[Index].Signal.SetDeactivationDelay(Delay);
+    _Devices[Index].DeviceAvailableSignal.SetDeactivationDelay(Delay);
 }
 
 // --- Controllo runtime ---
@@ -139,7 +139,7 @@ bool I2cBusHandler::IsAvailable (uint8_t Address) const
 {
     int Index = _FindDevice(Address);
     if (Index == -1) return false;
-    return _Devices[Index].Signal.GetFilteredSignal();
+    return _Devices[Index].DeviceAvailableSignal.GetFilteredSignal();
 }
 
 bool I2cBusHandler::TakeBus (unsigned long MaxWaitTime)
@@ -190,7 +190,7 @@ void I2cBusHandler::Loop ()
         if (TakeBus()) {
             bool Present = _Probe(_Devices[Index].Address);
             GiveBus();
-            _Devices[Index].Signal.Update(Present);
+            _Devices[Index].DeviceAvailableSignal.Update(Present);
         }
     }
 }

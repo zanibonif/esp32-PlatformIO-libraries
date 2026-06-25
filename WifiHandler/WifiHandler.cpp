@@ -126,7 +126,6 @@ void WifiHandler::Loop () {
 
     static unsigned long Timer = ZERO_TIME;
     bool Timeout;
-    int  WifiStatus;
 
     if (Timer > _ClockTime) {
         Timer = Timer - _ClockTime;
@@ -134,7 +133,6 @@ void WifiHandler::Loop () {
         Timer = ZERO_TIME;
     }
     Timeout    = (Timer == ZERO_TIME);
-    WifiStatus = WiFi.status();
 
     switch (_State) {
         case NOT_CONNECTED:
@@ -152,7 +150,7 @@ void WifiHandler::Loop () {
             break;
 
         case CONNECTION_IN_PROGRESS:
-            if (WifiStatus == WL_CONNECTED) {
+            if (WiFi.status() == WL_CONNECTED) {
                 LOG(INFO, _LogName, "Connesso a " + _SSID + " | RSSI: " + String(WiFi.RSSI()) + " | IP: "   + GetIPAddress());
                 Timer  = _PostConnectionDelay;
                 _State = POST_CONNECTION_DELAY;
@@ -189,7 +187,7 @@ void WifiHandler::Loop () {
                 WiFi.disconnect();
                 Timer  = _DisconnectionMaxTime;
                 _State = DISCONNECTION_IN_PROGRESS;
-            } else if (WifiStatus != WL_CONNECTED) {
+            } else if (WiFi.status() != WL_CONNECTED) {
                 LOG(WARNING, _LogName, "Connessione persa durante post-connection delay");
                 WiFi.disconnect();
                 Timer  = _DisconnectionMaxTime;
@@ -208,11 +206,12 @@ void WifiHandler::Loop () {
         case CONNECTED:
             if (!_Enabled) {
                 LOG(INFO, _LogName, "Disconnessione in corso");
+                if (_OnDisconnectedCallback) _OnDisconnectedCallback();
                 WiFi.disconnect();
                 Timer  = _DisconnectionMaxTime;
                 _State = DISCONNECTION_IN_PROGRESS;
-            } else if (WifiStatus != WL_CONNECTED) {
-                LOG(WARNING, _LogName, "Connessione persa | WiFi status: " + String(WifiStatus));
+            } else if (WiFi.status() != WL_CONNECTED) {
+                LOG(WARNING, _LogName, "Connessione persa | WiFi status: " + String(WiFi.status()));
                 if (_OnDisconnectedCallback) _OnDisconnectedCallback();
                 WiFi.disconnect();
                 Timer  = _DisconnectionMaxTime;
@@ -228,7 +227,7 @@ void WifiHandler::Loop () {
             break;
 
         case DISCONNECTION_IN_PROGRESS:
-            if (WifiStatus != WL_CONNECTED) {
+            if (WiFi.status() != WL_CONNECTED) {
                 LOG(INFO, _LogName, "Disconnesso");
                 _State = NOT_CONNECTED;
             } else if (Timeout) {
@@ -243,6 +242,7 @@ void WifiHandler::Loop () {
                 WiFi.softAPdisconnect(true);
                 WiFi.mode(WIFI_STA);
                 LOG(INFO, _LogName, "AP mode chiuso");
+                if (_OnDisconnectedCallback) _OnDisconnectedCallback();
                 _State = NOT_CONNECTED;
             } else if (Timeout) {
                 LOG(INFO, _LogName, "Tentativo STA in AP+STA mode...");
@@ -253,6 +253,9 @@ void WifiHandler::Loop () {
                 _State = AP_STA_RETRY;
             } else if (_RestartConnectionRequest) {
                 LOG(INFO, _LogName, "Ripartenza connessione");
+                WiFi.softAPdisconnect(true);
+                WiFi.mode(WIFI_STA);
+                if (_OnDisconnectedCallback) _OnDisconnectedCallback();
                 _RestartConnectionRequest = false;
                 _State = NOT_CONNECTED;
             }
@@ -264,15 +267,17 @@ void WifiHandler::Loop () {
                 WiFi.disconnect();
                 WiFi.mode(WIFI_STA);
                 LOG(INFO, _LogName, "AP mode chiuso");
+                if (_OnDisconnectedCallback) _OnDisconnectedCallback();
                 _State = NOT_CONNECTED;
             } else if (_RestartConnectionRequest) {
                 WiFi.softAPdisconnect(true);
                 WiFi.disconnect();
                 WiFi.mode(WIFI_STA);
                 LOG(INFO, _LogName, "Ripartenza connessione");
+                if (_OnDisconnectedCallback) _OnDisconnectedCallback();
                 _RestartConnectionRequest = false;
                 _State = NOT_CONNECTED;
-            } else if (WifiStatus == WL_CONNECTED) {
+            } else if (WiFi.status() == WL_CONNECTED) {
                 LOG(INFO, _LogName, "STA connesso | RSSI: " + String(WiFi.RSSI()) + " | IP: " + GetIPAddress());
                 WiFi.softAPdisconnect(true);
                 WiFi.mode(WIFI_STA);

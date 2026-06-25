@@ -62,7 +62,7 @@ LogTask.PeriodUs    = 50000;   // 50ms
 LogTask.AppCritical = false;
 LogTask.StackSize   = 4096;
 Scheduler.AddTask(LogTask);
-Scheduler.AddFunction(LogTask.ID, []() { Logger.Loop(); });
+Scheduler.AddFunction(LogTask, []() { Logger.Loop(); });
 ```
 
 ## Controllo runtime

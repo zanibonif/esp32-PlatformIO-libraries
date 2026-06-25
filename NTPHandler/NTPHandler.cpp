@@ -101,6 +101,7 @@ void NtpHandler::Loop () {
                 _State = NOT_CONNECTED;
             } else if (_NtpClient.forceUpdate()) {
                 LOG(INFO, _LogName, "Tempo sincronizzato: " + GetFormattedTime("%d/%m/%Y %H:%M:%S"));
+                LOG(INFO, _LogName, "Sincronizzazione automatica ogni " + String(_UpdateInterval) + " millisecondi abilitata");
                 if (_OnSyncCallback) _OnSyncCallback();
                 Timer = _UpdateInterval + _UpdateTimeout;
                 _State = CONNECTED;
@@ -118,7 +119,6 @@ void NtpHandler::Loop () {
                 LOG(INFO, _LogName, "Sincronizzazione fermata");
                 _State = NOT_CONNECTED;
             } else if (_NtpClient.update()) {
-                LOG(DEBUG, _LogName, "Tempo aggiornato: " + GetFormattedTime("%d/%m/%Y %H:%M:%S"));
                 Timer = _UpdateInterval + _UpdateTimeout;
             } else if (Timeout) {
                 LOG(WARNING, _LogName, "Timeout aggiornamento NTP - sincronizzazione persa");

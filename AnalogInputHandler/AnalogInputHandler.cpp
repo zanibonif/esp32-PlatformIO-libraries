@@ -183,12 +183,11 @@ void AnalogInputHandler::Update () {
         float EngineeringUnitValue = _VoltageValue * _VoltageToEngineeringUnitScaleFactor + _VoltageToEngineeringUnitOffset;
 
         if (_InputSaturationLimitsSet) {
-            if      (EngineeringUnitValue < _InputSaturationMinEngineeringUnit) { _EngineeringUnitValue = _InputSaturationMinEngineeringUnit; }
-            else if (EngineeringUnitValue > _InputSaturationMaxEngineeringUnit) { _EngineeringUnitValue = _InputSaturationMaxEngineeringUnit; }
-            else                                                                { _EngineeringUnitValue = EngineeringUnitValue; }
-        } else {
-            _EngineeringUnitValue = 0.0f;
+            if      (EngineeringUnitValue < _InputSaturationMinEngineeringUnit) { EngineeringUnitValue = _InputSaturationMinEngineeringUnit; }
+            else if (EngineeringUnitValue > _InputSaturationMaxEngineeringUnit) { EngineeringUnitValue = _InputSaturationMaxEngineeringUnit; }
         }
+
+        _EngineeringUnitValue = EngineeringUnitValue;
     } else {
         _VoltageValue         = 0.0f;
         _EngineeringUnitValue = 0.0f;

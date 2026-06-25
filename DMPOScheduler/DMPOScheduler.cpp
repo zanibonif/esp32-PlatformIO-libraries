@@ -89,7 +89,7 @@ int DMPOScheduler::AddTask (TaskConfig& Config) {
     return Config.ID;
 }
 
-bool DMPOScheduler::AddFunction (int TaskID, TaskFunction Fn) {
+bool DMPOScheduler::AddFunction (TaskConfig& Config, TaskFunction Fn) {
     if (_Started) {
         LOG(ERROR, "DMPOScheduler::AddFunction", "Impossibile aggiungere funzioni dopo Begin()");
         return false;
@@ -100,9 +100,9 @@ bool DMPOScheduler::AddFunction (int TaskID, TaskFunction Fn) {
         return false;
     }
 
-    TaskDescriptor* Descriptor = _FindTask(TaskID);
+    TaskDescriptor* Descriptor = _FindTask(Config.ID);
     if (Descriptor == nullptr) {
-        LOG(ERROR, "DMPOScheduler::AddFunction", ("Task con ID " + std::to_string(TaskID) + " non trovato").c_str());
+        LOG(ERROR, "DMPOScheduler::AddFunction", ("Task '" + Config.Name + "' non trovato").c_str());
         return false;
     }
 
@@ -155,7 +155,11 @@ bool DMPOScheduler::Begin () {
                 portYIELD_FROM_ISR(HigherPriorityTaskWoken);
             };
             TimerArgs.arg             = &Descriptor;
+            #ifdef CONFIG_ESP_TIMER_SUPPORTS_ISR_DISPATCH_METHOD
+            TimerArgs.dispatch_method = ESP_TIMER_ISR;
+            #else
             TimerArgs.dispatch_method = ESP_TIMER_TASK;
+            #endif
             TimerArgs.name            = Descriptor.Name.c_str();
 
             esp_err_t Err = esp_timer_create(&TimerArgs, &Descriptor.TimerHandle);

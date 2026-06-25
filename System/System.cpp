@@ -50,3 +50,26 @@ void SetCpuFrequency (unsigned int CpuFrequency) {
 unsigned int GetCpuFrequency () {
     return getCpuFrequencyMhz();
 }
+
+unsigned long long GetUptimeUs () {
+    return (unsigned long long)esp_timer_get_time();
+}
+
+void SetSystemTime (DateTimeProvider& Provider) {
+    time_t Epoch = (time_t)Provider.GetEpochTime();
+    struct timeval Tv = { .tv_sec = Epoch, .tv_usec = 0 };
+    settimeofday(&Tv, nullptr);
+    LOG(INFO, "SetSystemTime", "System time impostato: " + String((unsigned long)Epoch));
+}
+
+// --- Safe arithmetic ---
+
+void SafeIncrement (int& Value, int Step)                    { if (Value > INT_MAX   - Step) Value = INT_MAX;   else Value += Step; }
+void SafeIncrement (unsigned int& Value, unsigned int Step)  { if (Value > UINT_MAX  - Step) Value = UINT_MAX;  else Value += Step; }
+void SafeIncrement (long& Value, long Step)                  { if (Value > LONG_MAX  - Step) Value = LONG_MAX;  else Value += Step; }
+void SafeIncrement (unsigned long& Value, unsigned long Step){ if (Value > ULONG_MAX - Step) Value = ULONG_MAX; else Value += Step; }
+
+void SafeDecrement (int& Value, int Step)                    { if (Value < INT_MIN   + Step) Value = INT_MIN;   else Value -= Step; }
+void SafeDecrement (unsigned int& Value, unsigned int Step)  { if (Value < Step)             Value = 0;         else Value -= Step; }
+void SafeDecrement (long& Value, long Step)                  { if (Value < LONG_MIN  + Step) Value = LONG_MIN;  else Value -= Step; }
+void SafeDecrement (unsigned long& Value, unsigned long Step){ if (Value < Step)             Value = 0;         else Value -= Step; }

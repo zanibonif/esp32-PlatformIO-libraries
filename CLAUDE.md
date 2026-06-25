@@ -27,6 +27,8 @@ Il nucleo del sistema è il **DMPOScheduler**: uno scheduler FreeRTOS a cui veng
 | MQTTClient | ✅ omogenizzato 📄 |
 | LittleFSHandler | ✅ omogenizzato 📄 |
 | TimeDiscreteFilter | ✅ omogenizzato 📄 |
+| ParametersHandler | ✅ omogenizzato 📄 |
+| WebFileManager | ✅ omogenizzato 📄 |
 
 ---
 
@@ -197,6 +199,24 @@ I metodi nel `.cpp` seguono lo stesso ordine delle sezioni del `.h`, con comment
 // --- Controllo runtime ---
 // --- Internals ---
 ```
+
+### Pattern registrazione con struct (DMPOScheduler, ConfigHandler)
+
+Le librerie che richiedono registrazione pre-avvio usano una **struct di configurazione pubblica** il cui ID viene assegnato internamente dalla libreria. Il chiamante passa la struct (non l'ID) ai metodi successivi — l'ID è un dettaglio interno che il main non deve conoscere né manipolare direttamente.
+
+```cpp
+// SI
+DMPOScheduler::TaskConfig MyTask;
+MyTask.Name     = "MY_TASK";
+MyTask.PeriodUs = 100000;
+Scheduler.AddTask(MyTask);
+Scheduler.AddFunction(MyTask, []() { MyLib.Loop(); });   // passa la struct, non MyTask.ID
+
+// NO
+Scheduler.AddFunction(MyTask.ID, []() { MyLib.Loop(); }); // espone un dettaglio interno
+```
+
+Regola: se un metodo deve riferirsi a un elemento già registrato, riceve la **stessa struct** usata per la registrazione. L'eccezione sono i metodi di controllo runtime (`EnableTask`, `DisableTask`) che operano per nome stringa o sono chiamati da contesti dove la struct non è disponibile.
 
 ---
 

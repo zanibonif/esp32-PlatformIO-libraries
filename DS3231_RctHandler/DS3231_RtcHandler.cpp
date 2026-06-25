@@ -66,6 +66,10 @@ DateTime DS3231_RtcHandler::GetDateTime () {
     return DateTime(static_cast<uint32_t>(_CachedEpoch));
 }
 
+unsigned long DS3231_RtcHandler::GetEpochTime () {
+    return static_cast<unsigned long>(_CachedEpoch);
+}
+
 // Non bloccante: formatta la cache aggiornata dalla Loop
 String DS3231_RtcHandler::GetFormattedTime (const String& Format) {
     if (!_Enabled) return "RTC Disabled";

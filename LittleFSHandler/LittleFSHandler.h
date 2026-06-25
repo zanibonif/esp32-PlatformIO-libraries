@@ -1,6 +1,14 @@
 #pragma once
 #include <LittleFS.h>
 #include <LoggerHandler.h>
+#include <vector>
+
+struct FileInfo {
+    String Name;
+    size_t Size;
+    bool   IsDir     = false;
+    time_t LastWrite = 0;
+};
 
 class LittleFSHandler {
 public:
@@ -19,9 +27,15 @@ public:
     File   OpenFile   (const String& Path, const char* Mode);
 
     // Diagnostica
-    size_t TotalBytes ();
-    size_t UsedBytes  ();
-    void   PrintFiles (const String& Path = "/");
+    size_t                TotalBytes   ();
+    size_t                UsedBytes    ();
+    bool                  IsDirectory  (const String& Path);
+    void                  PrintFiles   (const String& Path = "/");
+    std::vector<FileInfo> ListFiles    (const String& Path = "/");
+
+    // Operazioni cartelle
+    bool CreateDir (const String& Path);
+    bool DeleteDir (const String& Path);
 
 private:
     LittleFSHandler ();

@@ -38,8 +38,8 @@ Rtc.SetDateTime(2025, 1, 15, 10, 30, 0);   // Anno, Mese, Giorno, Ore, Min, Sec
 La `Loop()` va nello stesso task (lento) di `I2cBus.Loop()`, dopo di essa — così tutte le transazioni I2C vivono in un unico task:
 
 ```cpp
-Scheduler.AddFunction(LowRateTaskConfiguration.ID, []() { I2cBus.Loop(); });
-Scheduler.AddFunction(LowRateTaskConfiguration.ID, []() { Rtc.Loop(); });
+Scheduler.AddFunction(LowRateTaskConfiguration, []() { I2cBus.Loop(); });
+Scheduler.AddFunction(LowRateTaskConfiguration, []() { Rtc.Loop(); });
 ```
 
 La cache viene aggiornata a ogni ciclo (con task a 100 ms la risoluzione è ampiamente sufficiente per orologio con secondi).

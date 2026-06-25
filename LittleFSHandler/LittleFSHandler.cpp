@@ -32,7 +32,7 @@ bool LittleFSHandler::FileExists (const String& Path) {
 
 bool LittleFSHandler::WriteFile (const String& Path, const String& Content) {
     LittleFS.remove(Path);
-    File F = LittleFS.open(Path, "w");
+    File F = LittleFS.open(Path, "w", true);
     if (!F) {
         LOG(ERROR, _LogName, "Apertura file fallita: " + Path);
         return false;
@@ -43,11 +43,12 @@ bool LittleFSHandler::WriteFile (const String& Path, const String& Content) {
 }
 
 bool LittleFSHandler::DeleteFile (const String& Path) {
+    if (!LittleFS.exists(Path)) return true;
     return LittleFS.remove(Path);
 }
 
 File LittleFSHandler::OpenFile (const String& Path, const char* Mode) {
-    return LittleFS.open(Path, Mode);
+    return LittleFS.open(Path, Mode, true);
 }
 
 // --- Diagnostica ---
@@ -58,6 +59,51 @@ size_t LittleFSHandler::TotalBytes () {
 
 size_t LittleFSHandler::UsedBytes () {
     return LittleFS.usedBytes();
+}
+
+bool LittleFSHandler::IsDirectory (const String& Path) {
+    File F = LittleFS.open(Path);
+    bool Result = F && F.isDirectory();
+    F.close();
+    return Result;
+}
+
+std::vector<FileInfo> LittleFSHandler::ListFiles (const String& Path) {
+    std::vector<FileInfo> Result;
+    File Dir = LittleFS.open(Path);
+    if (!Dir) return Result;
+    File Entry = Dir.openNextFile();
+    while (Entry) {
+        FileInfo Info;
+        String FullName = String(Entry.name());
+        Info.Name      = FullName.substring(FullName.lastIndexOf('/') + 1);
+        Info.IsDir     = Entry.isDirectory();
+        Info.Size      = Info.IsDir ? 0 : Entry.size();
+        Info.LastWrite = Info.IsDir ? 0 : Entry.getLastWrite();
+        Result.push_back(Info);
+        Entry = Dir.openNextFile();
+    }
+    return Result;
+}
+
+bool LittleFSHandler::CreateDir (const String& Path) {
+    return LittleFS.mkdir(Path);
+}
+
+bool LittleFSHandler::DeleteDir (const String& Path) {
+    File Dir = LittleFS.open(Path);
+    if (!Dir || !Dir.isDirectory()) return false;
+    File Entry = Dir.openNextFile();
+    while (Entry) {
+        String EntryPath = Path + "/" + String(Entry.name());
+        bool IsDir = Entry.isDirectory();
+        Entry.close();
+        if (IsDir) DeleteDir(EntryPath);
+        else       LittleFS.remove(EntryPath);
+        Entry = Dir.openNextFile();
+    }
+    Dir.close();
+    return LittleFS.rmdir(Path);
 }
 
 void LittleFSHandler::PrintFiles (const String& Path) {

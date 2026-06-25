@@ -47,7 +47,7 @@ MqttTask.PeriodUs    = 100000;   // 100ms
 MqttTask.AppCritical = false;
 MqttTask.StackSize   = 8192;
 Scheduler.AddTask(MqttTask);
-Scheduler.AddFunction(MqttTask.ID, []() { Mqtt.Loop(); });
+Scheduler.AddFunction(MqttTask, []() { Mqtt.Loop(); });
 
 Mqtt.SetClockTime(100);   // ms — deve corrispondere a PeriodUs / 1000
 ```

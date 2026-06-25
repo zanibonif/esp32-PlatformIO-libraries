@@ -43,7 +43,7 @@ WifiTask.PeriodUs    = 100000;   // 100ms
 WifiTask.AppCritical = false;
 WifiTask.StackSize   = 4096;
 Scheduler.AddTask(WifiTask);
-Scheduler.AddFunction(WifiTask.ID, []() { Wifi.Loop(); });
+Scheduler.AddFunction(WifiTask, []() { Wifi.Loop(); });
 ```
 
 `SetClockTime` deve corrispondere al PeriodUs del task:

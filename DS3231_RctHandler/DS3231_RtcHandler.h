@@ -33,8 +33,9 @@ public:
     bool IsAvailable () const;
 
     // Metodi principali (non bloccanti: leggono la cache aggiornata dalla Loop)
-    DateTime GetDateTime ();
-    String   GetFormattedTime (const String& Format = "%d/%m/%Y %H:%M:%S") override;
+    DateTime      GetDateTime     ();
+    String        GetFormattedTime (const String& Format = "%d/%m/%Y %H:%M:%S") override;
+    unsigned long GetEpochTime     () override;
 
     // Chiamato ciclicamente (task lento: transazione I2C e aggiornamento cache)
     void Loop ();

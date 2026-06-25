@@ -56,7 +56,7 @@ private:
     struct I2cDevice {
         uint8_t              Address = 0;
         bool                 Used    = false;
-        DigitalSignalHandler Signal;
+        DigitalSignalHandler DeviceAvailableSignal;
     };
 
     bool _SetupReady () const;

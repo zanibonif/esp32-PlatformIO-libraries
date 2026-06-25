@@ -41,7 +41,7 @@ ADCTask.PeriodUs    = 100000;   // 100ms
 ADCTask.AppCritical = false;
 ADCTask.StackSize   = 2048;
 Scheduler.AddTask(ADCTask);
-Scheduler.AddFunction(ADCTask.ID, []() {
+Scheduler.AddFunction(ADCTask, []() {
     Pressure.Update();
     Temperature.Update();
 });

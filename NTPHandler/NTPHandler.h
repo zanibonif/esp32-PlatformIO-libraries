@@ -29,7 +29,7 @@ public:
     // Diagnostica
     bool          IsConnected ();
     String        GetFormattedTime (const String& Format = "%H:%M:%S") override;
-    unsigned long GetEpochTime ();
+    unsigned long GetEpochTime () override;
 
     // Chiamato ciclicamente
     void Loop ();

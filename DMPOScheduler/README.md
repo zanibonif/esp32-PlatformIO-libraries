@@ -29,8 +29,8 @@ LogTask.StackSize   = 4096;
 Scheduler.AddTask(LogTask);   // scrive LogTask.ID
 
 // 3. Aggiungere le funzioni
-Scheduler.AddFunction(LogTask.ID, []() { Logger.Loop(); });
-Scheduler.AddFunction(LogTask.ID, []() { Ntp.Loop(); });
+Scheduler.AddFunction(LogTask, []() { Logger.Loop(); });
+Scheduler.AddFunction(LogTask, []() { Ntp.Loop(); });
 
 // 4. Avviare (non modificare dopo Begin())
 Scheduler.Begin();

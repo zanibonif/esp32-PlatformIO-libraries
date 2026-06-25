@@ -37,7 +37,7 @@ IOTask.PeriodUs    = 10000;   // 10ms
 IOTask.AppCritical = false;
 IOTask.StackSize   = 2048;
 Scheduler.AddTask(IOTask);
-Scheduler.AddFunction(IOTask.ID, []() {
+Scheduler.AddFunction(IOTask, []() {
     ButtonA.Update(digitalRead(PIN_BUTTON_A));
     LimitSwitch.Update(digitalRead(PIN_LIMIT));
 });
