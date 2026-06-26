@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include <vector>
+#include <functional>
 #include "LoggerHandler.h"
 
 #define PARAMETERS_ENCRYPT_KEY    "ESP32Key"
@@ -24,6 +25,16 @@ public:
 
     struct FileConfig { String Path; int ID = -1; };
 
+    // Enumerazione di sola lettura (per console/diagnostica)
+    struct ParameterInfo {
+        int    Id;
+        String Name;
+        String Type;       // "int","uint","long","ulong","float","bool","string"
+        String RawValue;   // come su file: ENC:... se cifrato
+        String FilePath;
+        bool   Encrypted;
+    };
+
     // Configurazione (setup — prima di Begin())
     void SetClockTime  (unsigned long Ms);
     void SetWriteDelay (unsigned long Ms);
@@ -43,6 +54,9 @@ public:
     // Get raw — valore come salvato su file; overload tipato per codice applicativo
     template<typename T> String GetRaw (ParamId<T> Param) const { return GetRaw(Param.ID); }
     String                      GetRaw (int Id)           const;
+
+    // Enumerazione di tutti i parametri, ordinata per file (sola lettura)
+    void ForEachParameter (std::function<void(const ParameterInfo&)> OnParam) const;
 
     // Forza scrittura immediata di tutti i file WritePending (es. prima di reboot/OTA)
     void ForceWrite ();
@@ -67,6 +81,7 @@ private:
     bool   _SaveFile             (FileEntry& Entry);
     void   _MarkWritePending     (int FileId);
     String _BuildCsv             (int FileId) const;
+    String _TypeName             (ConfigType Type) const;
     bool   _ParseLine            (const String& Line, int& OutId, String& OutName, String& OutType, String& OutValue) const;
     String _Encrypt              (const String& Value) const;
     String _Decrypt              (const String& Raw)   const;

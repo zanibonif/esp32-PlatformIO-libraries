@@ -43,8 +43,12 @@ String GetWakeUpReason () {
 }
 
 void SetCpuFrequency (unsigned int CpuFrequency) {
-    LOG(INFO, "SetCpuFrequency", "Frequency set to " + String(CpuFrequency));
-    setCpuFrequencyMhz(CpuFrequency);
+    if (!setCpuFrequencyMhz(CpuFrequency)) {
+        LOG(WARNING, "SetCpuFrequency", "Frequenza " + String(CpuFrequency) +
+            " MHz non supportata dal SoC, invariata a " + String(getCpuFrequencyMhz()) + " MHz");
+        return;
+    }
+    LOG(INFO, "SetCpuFrequency", "Frequency set to " + String(getCpuFrequencyMhz()) + " MHz");
 }
 
 unsigned int GetCpuFrequency () {

@@ -204,3 +204,26 @@ Scheduler.AddFunction(HighRateTask, []() {
     ButtonA.Update(digitalRead(PIN_BUTTON));
 });
 ```
+
+---
+
+## Logger su file + SerialConsole
+
+Il log su file e la console seriale vivono nel task **aperiodico**, con la console **dopo** il Logger:
+
+```cpp
+// setup() — dopo FileSystem.Init() (LittleFS montato)
+Logger.SetClockTime(APERIODIC_TASK_PERIOD / MILLISECONDS_TO_MICROSECONDS); // periodo del task aperiodico
+Logger.EnableFileLog();
+
+SerialConsole.AddMenuItem("Stampa IP", []() { Serial.println(Wifi.GetIPAddress()); });
+SerialConsole.Enable();
+
+// task aperiodico — la console DOPO il logger (unico scrittore sulla seriale)
+Scheduler.AddFunction(AperiodicTask, []() { Logger.Loop(); });
+Scheduler.AddFunction(AperiodicTask, []() { SerialConsole.Loop(); });
+```
+
+- `Logger.SetClockTime` deve combaciare col periodo del task aperiodico: il timer di scrittura su file scala di `_ClockTime`, non usa `millis()`.
+- `EnableFileLog()` va **dopo** il mount del filesystem — il Logger non monta LittleFS.
+- `SerialConsole.Loop()` va **dopo** `Logger.Loop()` nello stesso task: così c'è un solo scrittore sulla seriale ed entrando nel menu (`M`) la console sospende il log live con `Logger.DisableSerial()` (i messaggi continuano su file/WebSerial).

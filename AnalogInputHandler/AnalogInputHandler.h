@@ -31,6 +31,10 @@ private:
     int                _GPIO                                = 1;
     unsigned short     _InputResolution                     = 4095;
 
+    int                _AdcUnit                             = 1;     // 1 oppure 2
+    int                _AdcChannel                          = 0;     // canale risolto
+    bool               _AdcConfigured                       = false;
+
     bool               _InputFilterTimeConstantSet          = false;
     unsigned long      _InputFilterTimeConstant             = 500;   // milliseconds
     TimeDiscreteFilter _InputFilter;

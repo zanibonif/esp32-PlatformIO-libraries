@@ -29,6 +29,7 @@ Il nucleo del sistema è il **DMPOScheduler**: uno scheduler FreeRTOS a cui veng
 | TimeDiscreteFilter | ✅ omogenizzato 📄 |
 | ParametersHandler | ✅ omogenizzato 📄 |
 | WebFileManager | ✅ omogenizzato 📄 |
+| SerialConsoleHandler | ✅ omogenizzato 📄 |
 
 ---
 
@@ -53,6 +54,41 @@ Per i pattern di interazione tra librerie (ordine di init, WiFi come driver, cat
 - **`nullptr`** sempre, mai `NULL`
 - **Allineamento membri privati**: tipo paddato alla larghezza del tipo più largo, `=` allineati alla stessa colonna
 - **Spazio prima di `(`** nelle dichiarazioni e definizioni di funzioni (non nelle chiamate): `void SetPort (uint16_t Port);` / `void WebServerHandler::SetPort (uint16_t Port) {`
+- **Niente wrapping su più righe**: ogni istruzione, condizione e chiamata sta su **una sola riga**, anche se lunga. Vietato spezzare `if`/`while`/`for` con condizioni multilinea o spezzare le liste di argomenti.
+
+```cpp
+// NO
+snprintf(Warning.Message, LOGGER_MESSAGE_MAX_LEN,
+         "Messaggi persi per queue piena: %d", Dropped);
+
+if (_FileLogEnabled &&
+    (Entry.Type == LogType::Error || Entry.Type == LogType::FatalError))
+    _ForceWrite = true;
+
+// SI
+snprintf(Warning.Message, LOGGER_MESSAGE_MAX_LEN, "Messaggi persi per queue piena: %d", Dropped);
+
+if (_FileLogEnabled && (Entry.Type == LogType::Error || Entry.Type == LogType::FatalError)) _ForceWrite = true;
+```
+
+- **Graffa di apertura a fine riga (K&R) ovunque**: sia le definizioni di funzione sia i costrutti di controllo (`if`/`while`/`for`/`switch`/`else`) hanno la `{` in fondo alla riga, **non** sulla riga sotto.
+
+```cpp
+// NO
+if (Dropped > 0)
+{
+    ...
+}
+
+// SI
+void LoggerHandler::Loop () {
+    if (Dropped > 0) {
+        ...
+    } else {
+        ...
+    }
+}
+```
 
 ### Pattern Singleton
 

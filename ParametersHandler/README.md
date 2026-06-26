@@ -124,6 +124,18 @@ Tipi supportati: `int`, `uint`, `long`, `ulong`, `float`, `bool`, `string`.
 String Raw = Parameters.GetRaw(WIFI_SSID);
 ```
 
+## Enumerazione (sola lettura)
+
+Per elencare tutti i parametri (es. console o diagnostica) senza conoscerne gli ID, `ForEachParameter` invoca una callback per ogni parametro, **ordinati per file**:
+
+```cpp
+Parameters.ForEachParameter([](const ParametersHandler::ParameterInfo& P) {
+    Serial.println(P.FilePath + " | " + String(P.Id) + " " + P.Name + " (" + P.Type + ") = " + P.RawValue);
+});
+```
+
+`ParameterInfo` contiene `Id`, `Name`, `Type` (`int`/`uint`/`long`/`ulong`/`float`/`bool`/`string`), `RawValue` (come su file: `ENC:...` se cifrato), `FilePath`, `Encrypted`.
+
 ## Dipendenze
 
 - `LoggerHandler`

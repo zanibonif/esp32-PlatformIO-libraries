@@ -1,0 +1,20 @@
+{
+  "name": "SerialConsoleHandler",
+  "version": "1.0.0",
+  "description": "Console testuale su seriale: menu per stampare log live, log da file, configurazione e azioni custom.",
+  "authors": [
+    {
+      "name": "Filippo Maria Zaniboni",
+      "email": "filippo.zaniboni.88@gmail.com"
+    }
+  ],
+  "frameworks": ["arduino"],
+  "platforms": ["espressif32"],
+  "dependencies": [
+    { "name": "LoggerHandler" },
+    { "name": "ParametersHandler" }
+  ],
+  "build": {
+    "srcFilter": ["+<*>"]
+  }
+}

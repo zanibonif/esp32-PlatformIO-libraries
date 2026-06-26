@@ -239,20 +239,41 @@ bool ParametersHandler::_SaveFile (FileEntry& Entry) {
     return Ok;
 }
 
+String ParametersHandler::_TypeName (ConfigType Type) const {
+    switch (Type) {
+        case INT_PARAMETER:           return "int";
+        case UNSIGNED_INT_PARAMETER:  return "uint";
+        case LONG_PARAMETER:          return "long";
+        case UNSIGNED_LONG_PARAMETER: return "ulong";
+        case FLOAT_PARAMETER:         return "float";
+        case BOOL_PARAMETER:          return "bool";
+        case STRING_PARAMETER:        return "string";
+    }
+    return "";
+}
+
+void ParametersHandler::ForEachParameter (std::function<void(const ParameterInfo&)> OnParam) const {
+    if (!OnParam) return;
+    for (const FileEntry& F : _Files) {
+        for (const ParamEntry& P : _Params) {
+            if (P.FileId != F.Id) continue;
+            ParameterInfo Info;
+            Info.Id        = P.Id;
+            Info.Name      = P.Name;
+            Info.Type      = _TypeName(P.Type);
+            Info.RawValue  = P.Encrypted ? (String(PARAMETERS_ENCRYPT_PREFIX) + _Encrypt(P.Value)) : P.Value;
+            Info.FilePath  = F.Path;
+            Info.Encrypted = P.Encrypted;
+            OnParam(Info);
+        }
+    }
+}
+
 String ParametersHandler::_BuildCsv (int FileId) const {
     String Csv;
     for (const ParamEntry& P : _Params) {
         if (P.FileId != FileId) continue;
-        String TypeStr;
-        switch (P.Type) {
-            case INT_PARAMETER:           TypeStr = "int";    break;
-            case UNSIGNED_INT_PARAMETER:  TypeStr = "uint";   break;
-            case LONG_PARAMETER:          TypeStr = "long";   break;
-            case UNSIGNED_LONG_PARAMETER: TypeStr = "ulong";  break;
-            case FLOAT_PARAMETER:         TypeStr = "float";  break;
-            case BOOL_PARAMETER:          TypeStr = "bool";   break;
-            case STRING_PARAMETER:        TypeStr = "string"; break;
-        }
+        String TypeStr = _TypeName(P.Type);
         String StoredValue = P.Encrypted
             ? (String(PARAMETERS_ENCRYPT_PREFIX) + _Encrypt(P.Value))
             : P.Value;

@@ -12,7 +12,7 @@ extern DMPOScheduler& Scheduler;
 
 - **Task**: un FreeRTOS task con periodo e deadline. Si registra con `AddTask()`.
 - **Function**: una `std::function<void()>` agganciata a un task. Più funzioni sullo stesso task vengono eseguite in sequenza ogni tick.
-- **AppCritical**: se `true`, il task viene pinnato su **Core 1** (isolato da WiFi e stack di rete su Core 0) e sincronizzato via `esp_timer` hardware. Se `false`, usa `vTaskDelayUntil` su Core 0.
+- **AppCritical**: se `true`, il task viene pinnato su **Core 1** (isolato da WiFi e stack di rete su Core 0) e sincronizzato via `esp_timer` hardware. Se `false`, usa `vTaskDelayUntil` su Core 0. Su SoC single-core (es. C3) il Core 1 non esiste → vedi *Single-core* sotto.
 
 ## Setup e avvio
 
@@ -47,6 +47,10 @@ MotorTask.StackSize   = 8192;
 ```
 
 I task `AppCritical` sono sincronizzati via semaforo rilasciato da `esp_timer`: jitter nell'ordine dei microsecondi. I task non-`AppCritical` usano `vTaskDelayUntil` con risoluzione di 1 tick FreeRTOS (tipicamente 1ms). Task non-`AppCritical` con `PeriodUs < 1000` vengono rifiutati.
+
+### Single-core (es. ESP32-C3)
+
+Sui SoC single-core (`CONFIG_FREERTOS_UNICORE`, es. C3) non esiste il Core 1: i task `AppCritical` vengono pinnati sul **Core 0**, l'unico disponibile, condiviso col WiFi e lo stack di rete. La sincronizzazione `esp_timer` + semaforo resta valida, ma le garanzie real-time sono più deboli (niente isolamento dal WiFi). Su dual-core (es. S3) il comportamento è invariato.
 
 ## Priorità DMPO
 

@@ -14,7 +14,7 @@ AnalogInputHandler Temperature;
 ```cpp
 Pressure.SetName("Pressure");
 Pressure.SetClockTime(100);        // ms — periodo con cui Update() viene chiamato
-Pressure.SetGPIO(36);             // pin ADC (usa ADC1 — vedi nota WiFi)
+Pressure.SetGPIO(1);              // pin ADC1 (vedi "Pin ADC validi per chip")
 
 // Scaling: ADC → tensione → unità ingegneristiche
 Pressure.SetScaling(
@@ -61,7 +61,17 @@ float Value   = Pressure.GetValue();       // unità ingegneristiche
 - `LoggerHandler`
 - `driver/adc.h` (ESP-IDF)
 
+## Pin ADC validi per chip
+
+`SetGPIO()` accetta solo i pin ADC del SoC; un pin non valido viene rifiutato con LOG di errore.
+
+| SoC | ADC1 | ADC2 |
+|-----|------|------|
+| ESP32-S3 | GPIO 1–10 | GPIO 11–20 |
+| ESP32-C3 | GPIO 0–4  | GPIO 5     |
+
 ## Note
 
-- **ADC2 è condiviso con il WiFi**: usare sempre pin ADC1 (GPIO 32–39) quando WiFi è attivo.
-- La risoluzione ADC è 12 bit (0–4095).
+- **ADC2 è condiviso con il WiFi**: con WiFi attivo le letture su ADC2 possono fallire con `ESP_ERR_TIMEOUT` (loggato come "Wi-Fi conflict"). Preferire i pin ADC1.
+- La risoluzione ADC è 12 bit (0–4095); attenuazione 12 dB (fondoscala ~3.3 V).
+- Driver: legacy `driver/adc.h` (ESP-IDF 4.4). Nessuna calibrazione hardware: la tensione è stimata in modo lineare via `SetScaling`.

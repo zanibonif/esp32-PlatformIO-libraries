@@ -53,8 +53,12 @@ int DMPOScheduler::AddTask (TaskConfig& Config) {
     }
 
     if (Config.AppCritical) {
-        Config.CoreID = 1;
-        LOG(INFO, "DMPOScheduler::AddTask", ("Task '" + Config.Name + "' è AppCritical, CoreID forzato a 1").c_str());
+#if CONFIG_FREERTOS_UNICORE
+        Config.CoreID = 0;   // single-core (es. C3): unico core disponibile
+#else
+        Config.CoreID = 1;   // dual-core: isolato dal WiFi su Core 0
+#endif
+        LOG(INFO, "DMPOScheduler::AddTask", ("Task '" + Config.Name + "' è AppCritical, CoreID forzato a " + std::to_string(Config.CoreID)).c_str());
     } else {
         Config.CoreID = 0;
         LOG(INFO, "DMPOScheduler::AddTask", ("Task '" + Config.Name + "' non è AppCritical, CoreID forzato a 0").c_str());
@@ -152,7 +156,7 @@ bool DMPOScheduler::Begin () {
                 TaskDescriptor* Desc = static_cast<TaskDescriptor*>(Param);
                 BaseType_t HigherPriorityTaskWoken = pdFALSE;
                 xSemaphoreGiveFromISR(Desc->TimerSemaphore, &HigherPriorityTaskWoken);
-                portYIELD_FROM_ISR(HigherPriorityTaskWoken);
+                if (HigherPriorityTaskWoken == pdTRUE) { portYIELD_FROM_ISR(); }
             };
             TimerArgs.arg             = &Descriptor;
             #ifdef CONFIG_ESP_TIMER_SUPPORTS_ISR_DISPATCH_METHOD
@@ -370,7 +374,12 @@ DMPOScheduler::TaskDescriptor* DMPOScheduler::_FindTask (const std::string& Name
 }
 
 void DMPOScheduler::_AssignDMPOPriorities () {
-    for (int CoreID = 0; CoreID <= 1; CoreID++) {
+#if CONFIG_FREERTOS_UNICORE
+    const int MaxCoreID = 0;
+#else
+    const int MaxCoreID = 1;
+#endif
+    for (int CoreID = 0; CoreID <= MaxCoreID; CoreID++) {
         std::vector<TaskDescriptor*> CoreTasks;
         for (TaskDescriptor& Descriptor : _Tasks) {
             if (Descriptor.CoreID == CoreID)
