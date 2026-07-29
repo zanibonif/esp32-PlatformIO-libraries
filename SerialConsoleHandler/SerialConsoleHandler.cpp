@@ -1,6 +1,7 @@
 #include "SerialConsoleHandler.h"
 #include "LoggerHandler.h"
 #include "ParametersHandler.h"
+#include "System.h"   // GetUptimeUs
 #include <ctype.h>   // toupper
 
 SerialConsoleHandler& SerialConsoleHandler::GetInstance () {
@@ -40,7 +41,7 @@ void SerialConsoleHandler::Loop () {
         _State       = NORMAL;
         _InputBuffer = "";
         Logger.EnableSerial();
-        if (_Enabled) LOG(INFO, _LogName, "Console abilitata (premi 'M' per il menu)");
+        if (_Enabled) LOG(INFO, _LogName, "Console abilitata (premi 'M' o ESC per il menu)");
         _PreviousEnabled = _Enabled;
     }
     if (!_Enabled) return;
@@ -60,44 +61,37 @@ void SerialConsoleHandler::_ProcessInput () {
     while (Serial.available() > 0) {
         char C = (char)Serial.read();
 
-        // ESC = back universale, gestito ovunque
-        if (C == SERIAL_CONSOLE_EXIT_KEY) {
-            if (_State == VIEW_LIVE) {
-                Logger.DisableSerial();
-                _State = MENU;
-                _PrintMenu();
-            } else if (_State == MENU) {
-                _ExitToNormal();
-            }
+        bool IsMenuKey = (toupper((unsigned char)C) == toupper((unsigned char)SERIAL_CONSOLE_MENU_KEY));
+        bool IsExitKey = (C == SERIAL_CONSOLE_EXIT_KEY);
+
+        // Dal log live (NORMAL o VIEW_LIVE) sia 'M' sia ESC aprono il menu
+        if (_State == NORMAL || _State == VIEW_LIVE) {
+            if (IsMenuKey || IsExitKey) _EnterMenu();
             _InputBuffer = "";
             continue;
         }
 
-        if (_State == NORMAL) {
-            if (toupper((unsigned char)C) == toupper((unsigned char)SERIAL_CONSOLE_MENU_KEY)) _EnterMenu();
+        // _State == MENU: ESC torna al log live, i numeri selezionano
+        if (IsExitKey) {
+            _ExitToNormal();
+            _InputBuffer = "";
             continue;
         }
-
-        if (_State == MENU) {
-            if (C == '\r' || C == '\n') {
-                if (_InputBuffer.length() > 0) {
-                    int Index = _InputBuffer.toInt() - 1;
-                    _InputBuffer = "";
-                    _SelectItem(Index);
-                }
-            } else if (C == '\b' || C == 127) {
-                if (_InputBuffer.length() > 0) {
-                    _InputBuffer.remove(_InputBuffer.length() - 1);
-                    Serial.print("\b \b");
-                }
-            } else if (C >= '0' && C <= '9') {
-                _InputBuffer += C;
-                Serial.print(C);   // echo
+        if (C == '\r' || C == '\n') {
+            if (_InputBuffer.length() > 0) {
+                int Index = _InputBuffer.toInt() - 1;
+                _InputBuffer = "";
+                _SelectItem(Index);
             }
-            continue;
+        } else if (C == '\b' || C == 127) {
+            if (_InputBuffer.length() > 0) {
+                _InputBuffer.remove(_InputBuffer.length() - 1);
+                Serial.print("\b \b");
+            }
+        } else if (C >= '0' && C <= '9') {
+            _InputBuffer += C;
+            Serial.print(C);   // echo
         }
-
-        // VIEW_LIVE: solo ESC esce, gli altri tasti si ignorano
     }
 }
 
@@ -113,12 +107,13 @@ void SerialConsoleHandler::_ExitToNormal () {
     _InputBuffer = "";
     Logger.EnableSerial();
     Serial.println();
-    Serial.println("--- log live (premi 'M' per il menu) ---");
+    Serial.println("--- log live (premi 'M' o ESC per il menu) ---");
 }
 
 void SerialConsoleHandler::_PrintMenu () {
     Serial.println();
     Serial.println("===== MENU =====");
+    Serial.println("Uptime: " + String((unsigned long)(GetUptimeUs() / SECONDS_TO_MICROSECONDS)) + " s");
     for (size_t I = 0; I < _Items.size(); I++) {
         Serial.println("  " + String(I + 1) + ") " + _Items[I].Label);
     }
@@ -142,7 +137,7 @@ void SerialConsoleHandler::_SelectItem (int Index) {
 }
 
 void SerialConsoleHandler::_StartLiveLog () {
-    Serial.println("--- log live (ESC per tornare al menu) ---");
+    Serial.println("--- log live (premi 'M' o ESC per il menu) ---");
     _State = VIEW_LIVE;
     Logger.EnableSerial();
 }

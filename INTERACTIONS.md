@@ -227,3 +227,29 @@ Scheduler.AddFunction(AperiodicTask, []() { SerialConsole.Loop(); });
 - `Logger.SetClockTime` deve combaciare col periodo del task aperiodico: il timer di scrittura su file scala di `_ClockTime`, non usa `millis()`.
 - `EnableFileLog()` va **dopo** il mount del filesystem — il Logger non monta LittleFS.
 - `SerialConsole.Loop()` va **dopo** `Logger.Loop()` nello stesso task: così c'è un solo scrittore sulla seriale ed entrando nel menu (`M`) la console sospende il log live con `Logger.DisableSerial()` (i messaggi continuano su file/WebSerial).
+
+---
+
+## DRV8874MotorHandler — istanza in task veloce
+
+Driver motore **non-singleton**: un'istanza per motore, `Loop()` in un task **veloce** (lo stallo lavora bene a 1-10 ms). `SetClockTime` deve combaciare col periodo del task. Compone **internamente** `LinearConversion` (curva di stallo), `DigitalSignalHandler` (timer stallo) e `AnalogInputHandler` (IPROPI): non vanno istanziati a parte. La rampa soft-start è un **limitatore di pendenza** interno.
+
+```cpp
+DRV8874MotorHandler Motore;
+
+// setup()
+Motore.SetClockTime(HighRateTask.PeriodUs / MILLISECONDS_TO_MICROSECONDS);
+Motore.SetControlPins(EN, PH);
+Motore.SetPwm(canaleLEDC, 20000, 8);   // il canale lo assegna il main (vedi README motore)
+Motore.SetCurrentSense(AdcIpropi, 1000.0f, 0.00045f);
+Motore.SetStallCurve({ {0, 0.2f}, {50, 1.6f}, {100, 3.2f} });
+
+// task veloce
+Scheduler.AddFunction(HighRateTask, []() { Motore.Loop(); });
+
+// a runtime: avvio + pilotaggio da potenziometro (segno = direzione)
+Motore.Start(0);                                       // abilita e va in MOTOR_RUNNING
+Motore.NewSpeedSetPoint((int)PotVelocita.GetValue());  // aggiorna il target (solo a cambio reale)
+```
+
+- I canali LEDC sono una risorsa condivisa: assegna canali **distinti** a motore, pompa e altri handler PWM dal main.

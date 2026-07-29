@@ -17,13 +17,13 @@ extern SerialConsoleHandler& SerialConsole;
 
 | Stato | Log live su seriale | Input |
 |---|---|---|
-| `NORMAL` (default) | ON | `M` → apre il `MENU` |
-| `MENU` | OFF | numero + `INVIO` → seleziona una voce; `ESC` → `NORMAL` |
-| `VIEW_LIVE` | ON | `ESC` → torna al `MENU` |
+| `NORMAL` (default) | ON | `M` **o** `ESC` → apre il `MENU` |
+| `MENU` | OFF | numero + `INVIO` → seleziona una voce; `ESC` → log live |
+| `VIEW_LIVE` | ON | `M` **o** `ESC` → apre il `MENU` |
 
-- `M` apre il menu (tasto singolo, immediato): lo trova solo chi lo conosce.
-- Nel menu la voce si seleziona digitando il **numero + INVIO** (con echo e backspace).
-- `ESC` è il "back" universale: dal log live torna al menu, dal menu torna al log live.
+- Dal log live (sia `NORMAL` sia `VIEW_LIVE`) **sia `M` sia `ESC`** aprono il menu.
+- Nel menu la voce si seleziona digitando il **numero + INVIO** (con echo e backspace); `ESC` torna al log live.
+- L'intestazione del menu mostra l'**uptime in secondi**.
 - Entrando nel menu il log live sulla seriale viene sospeso (`Logger.DisableSerial()`): **i messaggi non si perdono**, continuano su file e WebSerial.
 
 Le voci "one-shot" (log da file, configurazione, custom) eseguono e **ristampano il menu** da sole. L'unica vista persistente è il log live, da cui si esce con `ESC`.
@@ -71,4 +71,4 @@ void AddMenuItem (const String& Label, std::function<void()> Action);
 ## Note
 
 - La lettura del log da file tiene il semaforo del Logger per tutta la durata del dump: sotto logging molto fitto qualche riga può andare persa durante la stampa (vedi `LoggerHandler`).
-- Console event-driven sull'input seriale: nessun timer, nessun `SetClockTime`.
+- Console event-driven sull'input seriale: nessun timer, nessun `SetClockTime`. L'uptime nel menu è letto da `System::GetUptimeUs()`.

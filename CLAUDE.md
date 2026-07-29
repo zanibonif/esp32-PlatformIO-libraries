@@ -30,6 +30,9 @@ Il nucleo del sistema è il **DMPOScheduler**: uno scheduler FreeRTOS a cui veng
 | ParametersHandler | ✅ omogenizzato 📄 |
 | WebFileManager | ✅ omogenizzato 📄 |
 | SerialConsoleHandler | ✅ omogenizzato 📄 |
+| LinearConversion | ✅ omogenizzato 📄 |
+| DRV8874MotorHandler | ✅ omogenizzato 📄 |
+| Statistics | ✅ omogenizzato 📄 |
 
 ---
 
@@ -45,6 +48,7 @@ Per i pattern di interazione tra librerie (ordine di init, WiFi come driver, cat
 
 ### Naming
 
+- **NIENTE abbreviazioni né troncamenti di parole — REGOLA FORTE, senza eccezioni.** Ogni identificatore (classe, metodo, parametro, variabile, membro, struct, enum) è fatto di **parole intere**. Prima di scrivere un nome, rileggilo e chiediti "è una parola intera?"; se è un troncamento, estendilo. Sbagliato → giusto: `pot`→`potenziometro`, `Stat`→`Statistic`/`CurrentStatistics`, `Cfg`/`Config`→`Configuration`, `Idx`→`Index`, `Val`→`Value`, `Btn`→`Button`, `Msg`→`Message`, `Num`→`Count`, `Addr`→`Address`, `Buf`→`Buffer`, `Freq`→`Frequency`, `Res`→`Resolution`. **Eccezioni ammesse** (NON vanno estese): acronimi tecnici standard in maiuscolo — `PWM`, `ADC`, `GPIO`, `USB`, `NTP`, `RMS`, `RSD`, `CSV`, `RTC`, `MQTT`, `OTA`; le forme brevi convenzionali `Init`, `Temp`, `min`, `max`, `count`; e i simboli di unità come suffisso (`Ms` = millisecondi). Tutto il resto per esteso.
 - **PascalCase** per tutto: classi, metodi, parametri, variabili locali
 - **`_` prefix** per membri privati: `_Enabled`, `_ClockTime`, `_LogQueue`
 - **`_` prefix** per metodi privati: `_FormatLog`, `_PublishLog`

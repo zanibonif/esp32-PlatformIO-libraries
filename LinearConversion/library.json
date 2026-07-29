@@ -1,0 +1,16 @@
+{
+  "name": "LinearConversion",
+  "version": "1.0.0",
+  "description": "Conversione lineare a tratti (spezzata) con estrapolazione agli estremi e saturazione dell'output.",
+  "authors": [
+    {
+      "name": "Filippo Maria Zaniboni",
+      "email": "filippo.zaniboni.88@gmail.com"
+    }
+  ],
+  "frameworks": ["arduino"],
+  "platforms": ["espressif32"],
+  "build": {
+    "srcFilter": ["+<*>"]
+  }
+}

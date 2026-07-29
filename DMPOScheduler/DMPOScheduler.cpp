@@ -355,6 +355,33 @@ void DMPOScheduler::PrintStatus () {
     LOG(INFO, "DMPOScheduler::PrintStatus", "=============================");
 }
 
+bool DMPOScheduler::IsStarted () const {
+    return _Started;
+}
+
+size_t DMPOScheduler::GetTaskCount () const {
+    return _Tasks.size();
+}
+
+void DMPOScheduler::ForEachTask (std::function<void(const TaskInfo&)> OnTask) const {
+    if (!OnTask) return;
+    for (const TaskDescriptor& Descriptor : _Tasks) {
+        TaskInfo Info;
+        Info.ID                  = Descriptor.ID;
+        Info.Name                = Descriptor.Name;
+        Info.CoreID              = Descriptor.CoreID;
+        Info.AppCritical         = Descriptor.AppCritical;
+        Info.Priority            = Descriptor.Priority;
+        Info.PeriodUs            = Descriptor.PeriodUs;
+        Info.DeadlineUs          = Descriptor.DeadlineUs;
+        Info.Enabled             = Descriptor.Enabled;
+        Info.LastCycleTimeUs     = Descriptor.LastCycleTimeUs;
+        Info.MissedDeadlineCount = Descriptor.MissedDeadlineCount;
+        Info.FunctionsCount      = Descriptor.Functions.size();
+        OnTask(Info);
+    }
+}
+
 // --- Internals ---
 
 DMPOScheduler::TaskDescriptor* DMPOScheduler::_FindTask (int TaskID) {

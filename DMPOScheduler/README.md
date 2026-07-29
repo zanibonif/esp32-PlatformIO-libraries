@@ -75,6 +75,19 @@ uint32_t Misses  = Scheduler.GetMissedDeadlineCount("Logger");
 Scheduler.PrintStatus();   // LOG di tutti i task con stato e statistiche
 ```
 
+### Enumerazione dei task (sola lettura)
+
+`PrintStatus()` scrive via `LOG` (utile a runtime, ma asincrono). Per ottenere i dati e stamparli/usarli direttamente — es. una console su `Serial` dove il log è sospeso — c'è `ForEachTask`, che invoca una callback per ogni task:
+
+```cpp
+Serial.println("Task: " + String(Scheduler.GetTaskCount()) + (Scheduler.IsStarted() ? " AVVIATO" : " NON AVVIATO"));
+Scheduler.ForEachTask([](const DMPOScheduler::TaskInfo& T) {
+    Serial.println(String(T.Name.c_str()) + " | core " + String((int)T.CoreID) + " | last " + String(T.LastCycleTimeUs) + " us | missed " + String(T.MissedDeadlineCount));
+});
+```
+
+`TaskInfo` contiene `ID`, `Name`, `CoreID`, `AppCritical`, `Priority`, `PeriodUs`, `DeadlineUs`, `Enabled`, `LastCycleTimeUs`, `MissedDeadlineCount`, `FunctionsCount`.
+
 ## Callback deadline miss
 
 ```cpp

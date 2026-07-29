@@ -1,0 +1,22 @@
+{
+  "name": "DRV8874MotorHandler",
+  "version": "1.0.0",
+  "description": "Driver motore DC con DRV8874 (modo PH/EN): velocità con segno, soft-start/cambio a rampa, lettura corrente IPROPI e protezione anti-blocco a tempo.",
+  "authors": [
+    {
+      "name": "Filippo Maria Zaniboni",
+      "email": "filippo.zaniboni.88@gmail.com"
+    }
+  ],
+  "frameworks": ["arduino"],
+  "platforms": ["espressif32"],
+  "dependencies": [
+    { "name": "LinearConversion" },
+    { "name": "DigitalSignalHandler" },
+    { "name": "AnalogInputHandler" },
+    { "name": "LoggerHandler" }
+  ],
+  "build": {
+    "srcFilter": ["+<*>"]
+  }
+}

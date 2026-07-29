@@ -1,0 +1,16 @@
+{
+  "name": "Statistics",
+  "version": "1.0.0",
+  "description": "Statistiche cumulative di un segnale (min, max, media, sigma, RSD, RMS) con accumulatori a memoria costante.",
+  "authors": [
+    {
+      "name": "Filippo Maria Zaniboni",
+      "email": "filippo.zaniboni.88@gmail.com"
+    }
+  ],
+  "frameworks": ["arduino"],
+  "platforms": ["espressif32"],
+  "build": {
+    "srcFilter": ["+<*>"]
+  }
+}

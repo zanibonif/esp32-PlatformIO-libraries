@@ -33,6 +33,21 @@ public:
         BaseType_t    CoreID;
     };
 
+    // Informazioni di sola lettura su un task (diagnostica)
+    struct TaskInfo {
+        int         ID;
+        std::string Name;
+        BaseType_t  CoreID;
+        bool        AppCritical;
+        UBaseType_t Priority;
+        uint32_t    PeriodUs;
+        uint32_t    DeadlineUs;
+        bool        Enabled;
+        uint32_t    LastCycleTimeUs;
+        uint32_t    MissedDeadlineCount;
+        size_t      FunctionsCount;
+    };
+
     // Configurazione
     int  AddTask     (TaskConfig& Config);
     bool AddFunction (TaskConfig& Config, TaskFunction Fn);
@@ -54,6 +69,9 @@ public:
     uint32_t GetMissedDeadlineCount (int TaskID);
     uint32_t GetMissedDeadlineCount (const std::string& Name);
     void     PrintStatus ();
+    bool     IsStarted () const;
+    size_t   GetTaskCount () const;
+    void     ForEachTask (std::function<void(const TaskInfo&)> OnTask) const;
 
 private:
 
