@@ -6,6 +6,10 @@ Raccolta di librerie C++ per ESP32 (Arduino/IDF). Ogni libreria sta in una sotto
 
 Il nucleo del sistema è il **DMPOScheduler**: uno scheduler FreeRTOS a cui vengono agganciati i metodi ciclici di ogni libreria. Tutto il lifecycle dei task deve passare per lui.
 
+**Requisito dalla 2.0.0: Arduino-ESP32 3.x** (PlatformIO `espressif32@8.0.0` o successiva).
+`AnalogInputHandler` e `DRV8874MotorHandler` non compilano più su 2.0.x. Le modifiche di ogni
+versione, con i cambi di API da applicare ai progetti, stanno in `CHANGELOG.md`.
+
 ---
 
 ## Stato librerie

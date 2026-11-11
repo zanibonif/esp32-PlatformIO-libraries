@@ -240,7 +240,7 @@ DRV8874MotorHandler Motore;
 // setup()
 Motore.SetClockTime(HighRateTask.PeriodUs / MILLISECONDS_TO_MICROSECONDS);
 Motore.SetControlPins(EN, PH);
-Motore.SetPwm(canaleLEDC, 20000, 8);   // il canale lo assegna il main (vedi README motore)
+Motore.SetPwm(20000);                  // canale e timer li assegna il core (vedi README motore)
 Motore.SetCurrentSense(AdcIpropi, 1000.0f, 0.00045f);
 Motore.SetStallCurve({ {0, 0.2f}, {50, 1.6f}, {100, 3.2f} });
 
@@ -252,4 +252,4 @@ Motore.Start(0);                                       // abilita e va in MOTOR_
 Motore.NewSpeedSetPoint((int)PotVelocita.GetValue());  // aggiorna il target (solo a cambio reale)
 ```
 
-- I canali LEDC sono una risorsa condivisa: assegna canali **distinti** a motore, pompa e altri handler PWM dal main.
+- Con Arduino-ESP32 3.x il main non assegna più canali LEDC: il core sceglie il timer in base alla coppia (frequenza, risoluzione), quindi carichi a frequenze diverse restano indipendenti. Il C3 ha 4 timer: un quinto valore di frequenza diverso farebbe fallire `ledcAttach`, e la libreria lo segnala come fault.

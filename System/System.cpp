@@ -9,10 +9,20 @@ void Hibernate (unsigned long long int HibernationTime) {
     LOG(INFO, "Hibernate", "Going in hibernation for " + String(HibernationTime) + " seconds");
 
     esp_sleep_enable_timer_wakeup(HibernationTime * SECONDS_TO_MICROSECONDS);
-    esp_sleep_pd_config(ESP_PD_DOMAIN_MAX, ESP_PD_OPTION_OFF);
+    // ESP-IDF 5.x declares each power-down domain only on SoCs that have it (the C3 has none of
+    // these three), so each call is guarded by the same macro used in esp_sleep.h.
+    // ESP-IDF 4.4 declares all three unconditionally and lacks some of those macros: the version
+    // check keeps the original behaviour there.
+    // ESP_PD_DOMAIN_MAX is the number of domains, not a domain: it must not be passed here.
+#if SOC_PM_SUPPORT_RTC_PERIPH_PD || (ESP_IDF_VERSION_MAJOR < 5)
     esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_OFF);
+#endif
+#if SOC_PM_SUPPORT_RTC_SLOW_MEM_PD || (ESP_IDF_VERSION_MAJOR < 5)
     esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_OFF);
+#endif
+#if SOC_PM_SUPPORT_RTC_FAST_MEM_PD || (ESP_IDF_VERSION_MAJOR < 5)
     esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);
+#endif
 
     esp_deep_sleep_start();
 }

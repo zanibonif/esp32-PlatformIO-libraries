@@ -14,7 +14,7 @@ public:
     void SetName (const String& Name);
     void SetClockTime (unsigned long Ms);
     void SetControlPins (int EnablePin, int DirectionPin);    // EN(PWM), PH
-    void SetPwm (int LedcChannel, unsigned int FreqHz, int ResolutionBits);   // canale LEDC esplicito (lo gestisce il main)
+    void SetPwm (unsigned int FreqHz);                        // obbligatoria; risoluzione = massima possibile a FreqHz
     void SetSleepPin (int SleepPin);                          // opz. (nSLEEP); -1 se a 3,3V
     void SetFaultPin (int FaultPin);                          // opz. (nFAULT, active-low)
     void SetCurrentSense (int AdcPin, float RIpropiOhm, float AIpropi);  // IPROPI (AnalogInput interno)
@@ -45,7 +45,10 @@ public:
     int         GetSpeedSetPoint () const;    // -100..+100 (applicato/rampato)
     bool        TargetSpeedReached () const;  // MOTOR_RUNNING && applicato == target
     float       GetCurrent () const;          // A
-    bool        IsDriveFault () const;             // vivo (nFAULT)
+    bool        IsCurrentCalibrated () const; // false se l'ADC e' ripiegato sulla scala nominale
+    bool        IsDriveFault () const;             // vivo (nFAULT), oppure PWM non disponibile
+    unsigned int GetPwmFrequency () const;          // Hz effettivi letti dal LEDC; 0 se il PWM non e' attivo
+    int         GetPwmResolution () const;         // bit calcolati da SetPwm
     bool        IsMotorStalled () const;           // latchato (azzerato da Start/EnableDrive)
     bool        IsDriveEnabled () const;
     bool        IsMotorRunning () const;
@@ -56,6 +59,9 @@ public:
 
 private:
     void        _InitHardware ();
+    void        _InitPwm ();
+    void        _DisablePwm (const String& Reason);
+    bool        _PwmFault () const;
     void        _StopOutputs ();
     void        _ReadFault ();
     void        _ReadCurrent ();
@@ -76,8 +82,9 @@ private:
     int           _AdcPin       = -1;
 
     unsigned int  _PwmFreq       = 20000;
-    int           _PwmResolution = 8;
-    int           _PwmChannel    = -1;
+    int           _PwmResolution = 0;       // calcolata da SetPwm
+    bool          _PwmConfigured = false;   // SetPwm chiamata
+    bool          _PwmReady      = false;   // LEDC attaccato e frequenza verificata
 
     float         _RIpropi         = 1000.0f;
     float         _AIpropi         = 0.00045f;

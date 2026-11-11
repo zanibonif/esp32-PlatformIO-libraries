@@ -1,6 +1,35 @@
 #include "DRV8874MotorHandler.h"
 #include <LoggerHandler.h>
 #include <math.h>
+#include <driver/ledc.h>
+#include <esp32-hal-periman.h>
+
+// Risoluzione PWM massima realizzabile a FreqHz: e' quella per cui il timer LEDC conta ancora
+// 2^bit passi del proprio clock in un periodo, cioe' floor(log2(clock / freq)), limitata dalla
+// larghezza del timer del SoC. Il core Arduino 3.x usa il clock XTAL dove il SoC lo supporta
+// (C3: 40 MHz), altrimenti APB. Ritorna 0 se la frequenza e' troppo alta per qualsiasi risoluzione.
+static int MaxLedcResolution (unsigned int FreqHz) {
+    if (FreqHz == 0) return 0;
+    unsigned int ClockHz = getApbFrequency();
+#ifdef SOC_LEDC_SUPPORT_XTAL_CLOCK
+    if (ledcGetClockSource() == LEDC_USE_XTAL_CLK) ClockHz = getXtalFrequencyMhz() * 1000000UL;
+#endif
+    unsigned int Bits = ledc_find_suitable_duty_resolution(ClockHz, FreqHz);
+    // Un bit sotto la larghezza del timer: alla larghezza piena il duty "sempre acceso" (2^bit)
+    // non sta nel registro e torna a zero. Verificato a banco: a 14 bit sul C3 la pompa andava
+    // solo durante le rampe e si spegneva al 100 %.
+    if (Bits > (SOC_LEDC_TIMER_BIT_WIDTH - 1)) Bits = SOC_LEDC_TIMER_BIT_WIDTH - 1;
+    return (int)Bits;
+}
+
+// Frequenza effettiva del timer LEDC a cui e' collegato il pin, 0 se il pin non e' collegato.
+// Non si usa ledcReadFreq() del core perche' ritorna 0 quando il duty e' 0 (lo deduce da
+// ledcRead), cioe' proprio a carico fermo, che e' quando la si verifica.
+static unsigned int ReadLedcTimerFrequency (int Pin) {
+    ledc_channel_handle_t* Bus = (ledc_channel_handle_t*)perimanGetPinBus(Pin, ESP32_BUS_TYPE_LEDC);
+    if (Bus == nullptr) return 0;
+    return ledc_get_freq((ledc_mode_t)(Bus->channel / SOC_LEDC_CHANNEL_NUM), (ledc_timer_t)Bus->timer_num);
+}
 
 // --- Configurazione ---
 
@@ -18,11 +47,16 @@ void DRV8874MotorHandler::SetControlPins (int EnablePin, int DirectionPin) {
     _HwReady = false;
 }
 
-void DRV8874MotorHandler::SetPwm (int LedcChannel, unsigned int FreqHz, int ResolutionBits) {
-    _PwmChannel    = LedcChannel;
+void DRV8874MotorHandler::SetPwm (unsigned int FreqHz) {
     _PwmFreq       = FreqHz;
-    _PwmResolution = ResolutionBits;
+    _PwmResolution = MaxLedcResolution(FreqHz);
+    _PwmConfigured = true;
     _HwReady = false;
+    if (_PwmResolution > 0) {
+        LOG(INFO, _LogName, "PWM: " + String(_PwmFreq) + " Hz, risoluzione " + String(_PwmResolution) + " bit");
+    } else {
+        LOG(ERROR, _LogName, "PWM: " + String(_PwmFreq) + " Hz non realizzabile con nessuna risoluzione");
+    }
 }
 
 void DRV8874MotorHandler::SetSleepPin (int SleepPin) {
@@ -119,11 +153,14 @@ int   DRV8874MotorHandler::GetTargetSpeed () const                     { return 
 int   DRV8874MotorHandler::GetSpeedSetPoint () const                   { return _AppliedSpeed; }
 bool  DRV8874MotorHandler::TargetSpeedReached () const                 { return ((_State == MOTOR_RUNNING) && (_AppliedSpeed == _TargetSpeed)); }
 float DRV8874MotorHandler::GetCurrent () const                         { return _Current; }
+bool  DRV8874MotorHandler::IsCurrentCalibrated () const                { return _CurrentInput.IsCalibrated(); }
 bool  DRV8874MotorHandler::IsDriveFault () const                       { return _Fault; }
 bool  DRV8874MotorHandler::IsMotorStalled () const                     { return _Stalled; }
 bool  DRV8874MotorHandler::IsDriveEnabled () const                     { return (_State != DRIVE_DISABLED); }
 bool  DRV8874MotorHandler::IsMotorRunning () const                     { return (_State == MOTOR_RUNNING); }
 bool  DRV8874MotorHandler::IsStallDetectionEnabled () const            { return _StallDetectionEnabled; }
+unsigned int DRV8874MotorHandler::GetPwmFrequency () const             { return _PwmReady ? ReadLedcTimerFrequency(_EnablePin) : 0; }
+int   DRV8874MotorHandler::GetPwmResolution () const                   { return _PwmResolution; }
 
 // --- Macchina a stati ---
 
@@ -134,8 +171,11 @@ void DRV8874MotorHandler::Loop () {
     switch (_State) {
 
         case DRIVE_DISABLED:
-            if (_Enabled) {
-                if (!_HwReady) { _InitHardware(); _HwReady = true; }
+            if (_Enabled && !_HwReady) { _InitHardware(); _HwReady = true; }
+            // Con il PWM non disponibile il driver resta qui, in sleep: IsDriveFault() lo
+            // segnala. Senza questa condizione nSLEEP oscillerebbe a ogni giro fra qui e
+            // DRIVE_ENABLED, che esce su _Fault.
+            if (_Enabled && !_PwmFault()) {
                 if (_SleepPin >= 0) digitalWrite(_SleepPin, HIGH);   // nSLEEP attivo
                 LOG(DEBUG, _LogName, "stato: DRIVE_ENABLED");   // DEBUG (rimuovere)
                 _State = DRIVE_ENABLED;
@@ -220,20 +260,17 @@ void DRV8874MotorHandler::_InitHardware () {
     if (_SleepPin >= 0)     pinMode(_SleepPin, OUTPUT);
     if (_FaultPin >= 0)     pinMode(_FaultPin, INPUT);   // pull-up esterno 47k
 
-    if (_EnablePin >= 0 && _PwmChannel >= 0) {
-        ledcSetup(_PwmChannel, _PwmFreq, _PwmResolution);
-        ledcAttachPin(_EnablePin, _PwmChannel);
-    } else if (_EnablePin >= 0) {
-        LOG(ERROR, _LogName, "PWM non configurato: manca il canale LEDC (usare SetPwm)");
-    }
+    _InitPwm();
 
     if (_AdcPin >= 0) {
-        const float Vref = 3.3f;
-        float MaxAmps = Vref / (_RIpropi * _AIpropi);
+        // I = V / (R_IPROPI * A_IPROPI): la scala e' una retta per l'origine, il fondo scala
+        // serve solo a fissarne la pendenza. La tensione arriva gia' calibrata.
+        const float FullScaleVoltage = 3.3f;
+        float MaxAmps = FullScaleVoltage / (_RIpropi * _AIpropi);
         _CurrentInput.SetName(_LogName + "I");
         _CurrentInput.SetClockTime(_ClockTime);
         _CurrentInput.SetGPIO(_AdcPin);
-        _CurrentInput.SetScaling(Vref, 0.0f, Vref, 0.0f, MaxAmps);
+        _CurrentInput.SetScaling(0.0f, FullScaleVoltage, 0.0f, MaxAmps);
         _CurrentInput.SetSaturations(0.0f, MaxAmps);
         _CurrentInput.SetInputFilterTimeConstant(_CurrentFilterMs);
     }
@@ -246,6 +283,49 @@ void DRV8874MotorHandler::_InitHardware () {
     _StallDetector.Enable();
 }
 
+void DRV8874MotorHandler::_InitPwm () {
+    _PwmReady = false;
+    if (_EnablePin < 0) return;
+
+    if (!_PwmConfigured) {
+        _DisablePwm("PWM non configurato (usare SetPwm)");
+        return;
+    }
+
+    // ledcAttach fonde configurazione del timer e collegamento del pin: se fallisce non e'
+    // garantito in che stato resti il pin, quindi _DisablePwm lo riporta esplicitamente in Hi-Z.
+    if (!ledcAttach(_EnablePin, _PwmFreq, _PwmResolution)) {
+        _DisablePwm("LEDC: " + String(_PwmFreq) + " Hz a " + String(_PwmResolution) + " bit non realizzabile");
+        return;
+    }
+
+    // Il core sceglie il timer in base alla coppia (frequenza, risoluzione): una frequenza
+    // effettiva diversa puo' venire solo da un timer condiviso o da un errore di configurazione.
+    unsigned int ActualFrequency = ReadLedcTimerFrequency(_EnablePin);
+    if ((ActualFrequency == 0) || (abs((int)ActualFrequency - (int)_PwmFreq) > (int)(_PwmFreq / 20))) {   // tolleranza 5 %
+        _DisablePwm("LEDC: frequenza effettiva " + String(ActualFrequency) + " Hz invece di " + String(_PwmFreq) + " Hz");
+        return;
+    }
+
+    ledcWrite(_EnablePin, 0);   // EN basso finche' non parte il motore
+    _PwmReady = true;
+}
+
+// Messa in sicurezza: pin EN in Hi-Z (il pull-down interno del DRV8874 tiene EN basso, sulla
+// rete non c'e' una resistenza esterna) e driver in sleep, che porta le uscite in Hi-Z
+// indipendentemente da EN. Il guasto e' poi esposto da IsDriveFault().
+void DRV8874MotorHandler::_DisablePwm (const String& Reason) {
+    LOG(ERROR, _LogName, Reason + ": motore disabilitato");
+    ledcDetach(_EnablePin);
+    pinMode(_EnablePin, INPUT);
+    if (_SleepPin >= 0) digitalWrite(_SleepPin, LOW);
+    _PwmReady = false;
+}
+
+bool DRV8874MotorHandler::_PwmFault () const {
+    return _HwReady && (_EnablePin >= 0) && !_PwmReady;
+}
+
 void DRV8874MotorHandler::_StopOutputs () {
     _AppliedSpeedF = 0.0f;
     _AppliedSpeed  = 0;
@@ -253,11 +333,12 @@ void DRV8874MotorHandler::_StopOutputs () {
 }
 
 void DRV8874MotorHandler::_ReadFault () {
-    if (_FaultPin < 0 || !_HwReady) return;
+    if (!_HwReady) return;
 
-    bool NowFault = (digitalRead(_FaultPin) == LOW);   // open-drain active-low
+    bool DriverFault = (_FaultPin >= 0) && (digitalRead(_FaultPin) == LOW);   // open-drain active-low
+    bool NowFault    = DriverFault || _PwmFault();
     if (NowFault && !_Fault) {
-        LOG(WARNING, _LogName, "FAULT (nFAULT: OCP/termico/UVLO)");
+        LOG(WARNING, _LogName, DriverFault ? "FAULT (nFAULT: OCP/termico/UVLO)" : "FAULT (PWM non disponibile)");
         if (_OnFault) _OnFault();
     }
     _Fault = NowFault;
@@ -315,9 +396,9 @@ void DRV8874MotorHandler::_RecomputeMaxStep (int Target) {
 
 void DRV8874MotorHandler::_ApplyOutputs () {
     if (_DirectionPin >= 0) digitalWrite(_DirectionPin, (_AppliedSpeed >= 0) ? HIGH : LOW);
-    if (_EnablePin >= 0 && _PwmChannel >= 0) {
+    if (_PwmReady) {
         int Duty = abs(_AppliedSpeed) * _MaxDuty() / 100;   // |vel%| -> duty
-        ledcWrite(_PwmChannel, Duty);
+        ledcWrite(_EnablePin, Duty);
     }
 }
 

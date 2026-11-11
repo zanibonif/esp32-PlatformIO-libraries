@@ -1,6 +1,6 @@
 {
   "name": "AnalogInputHandler",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Gestione e filtraggio di un ingresso analogico con supporto per filtri discreti e logging.",
   "authors": [
     {

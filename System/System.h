@@ -8,7 +8,7 @@
 //    Global constant
 // ----------------------------
 
-#define LIBRARIES_VERSION_1            1
+#define LIBRARIES_VERSION_1            2
 #define LIBRARIES_VERSION_2            0
 #define LIBRARIES_VERSION_3            0
 

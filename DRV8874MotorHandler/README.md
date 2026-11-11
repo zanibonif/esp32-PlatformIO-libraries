@@ -49,7 +49,7 @@ Lo stallo (corrente alta sostenuta) sta **sotto l'OCP** del DRV8874, quindi va g
 
 **Reazione (tenuta in libreria)**: allo stallo o al fault la libreria fa `ImmediateStop()` da sé **+** scatta la callback (`OnStall` / `OnFault`).
 - `IsMotorStalled()` è **latchato** (si azzera al successivo `Start()`/`EnableDrive()`).
-- `IsDriveFault()` è **vivo** (riflette `nFAULT`, condizione hardware che persiste finché non rientra).
+- `IsDriveFault()` è **vivo** (riflette `nFAULT`, condizione hardware che persiste finché non rientra). È vero anche quando il **PWM non è disponibile** (vedi sotto): in quel caso il driver resta in `DRIVE_DISABLED`, in sleep, finché non si riconfigura con `SetPwm`.
 
 > ⚠️ La callback `OnStall` è il punto dove l'app aggiunge la sua logica (avviso, retry, inversione per disinceppare). La libreria ha già fermato il motore.
 
@@ -61,7 +61,7 @@ DRV8874MotorHandler Motore;
 Motore.SetName("MotoreLame");
 Motore.SetClockTime(HIGH_RATE_TASK_PERIOD / MILLISECONDS_TO_MICROSECONDS);
 Motore.SetControlPins(/*EN=*/6, /*PH=*/7);
-Motore.SetPwm(/*canaleLEDC=*/0, 20000, 8);   // canale, 20 kHz, 8 bit
+Motore.SetPwm(/*FreqHz=*/20000);              // obbligatoria; la risoluzione la calcola lei
 Motore.SetSleepPin(20);                       // opzionale
 Motore.SetFaultPin(5);                        // opzionale
 Motore.SetCurrentSense(/*ADC=*/4, /*R_IPROPI=*/1000.0f, /*A_IPROPI=*/0.00045f);
@@ -97,17 +97,22 @@ bool reached  = Motore.TargetSpeedReached();
 int  target   = Motore.GetTargetSpeed();
 int  applied  = Motore.GetSpeedSetPoint();
 float current = Motore.GetCurrent();
+bool  cal     = Motore.IsCurrentCalibrated(); // false se l'ADC è ripiegato sulla scala nominale
 bool  fault   = Motore.IsDriveFault();
 bool  stalled = Motore.IsMotorStalled();
+unsigned int pwmHz   = Motore.GetPwmFrequency();  // Hz effettivi del timer LEDC; 0 se il PWM non è attivo
+int          pwmBits = Motore.GetPwmResolution(); // bit calcolati da SetPwm
 ```
 
 > Senza `SetSpeedDeadband` (rimossa): la stabilità del set-point è responsabilità dell'app. Chiama `NewSpeedSetPoint` solo a cambio reale (isteresi sul potenziometro), altrimenti il "a regime" non si assesta mai e il controllo stallo non si arma.
 
 ## Note
 
-- **PWM/LEDC**: con Arduino 2.0.17 i canali LEDC sono espliciti e limitati (C3: 6). Il canale lo passi tu in `SetPwm(canale, freq, ris)` ed è **responsabilità del main** assegnare canali distinti ai vari handler PWM. In Arduino 3 il nuovo `ledcAttach(pin, freq, ris)` assegna il canale da sé e questo parametro sparirà.
+- **Requisito: Arduino-ESP32 3.x** (dalla 2.0.0; PlatformIO `espressif32@8.0.0` o successiva). Non compila più su 2.0.x.
+- **PWM/LEDC**: `SetPwm(FreqHz)` è obbligatoria. Canale e timer li assegna il core con `ledcAttach`, scegliendo il timer in base alla coppia (frequenza, risoluzione): carichi a frequenze diverse non possono finire sullo stesso timer. La risoluzione è la **massima realizzabile** a quella frequenza, ma **un bit sotto la larghezza del timer** (C3: 13 su 14): alla larghezza piena il duty "sempre acceso" (2^bit) torna a zero. Viene scritta a log `INFO` (es. 20 kHz → 10 bit sul C3).
+- **Verifica all'avvio**: dopo `ledcAttach` la libreria legge la frequenza effettiva del timer (non con `ledcReadFreq()`, che a duty 0 ritorna 0) e la confronta con quella chiesta, tolleranza 5 %. Se l'attach fallisce o la frequenza non torna: errore a log, pin `EN` in Hi-Z, `nSLEEP` basso, `IsDriveFault()` vero.
 - **Fail-safe**: al reset/hang i GPIO vanno Hi-Z e `EN` (pull-down interno 100k) scende → ponte in brake = motore fermo, anche senza `nSLEEP`.
-- **Corrente**: gestita da un `AnalogInputHandler` interno (ADC + filtro 1° ordine + scaling a Ampere). `GetCurrent()` è già in A, filtrata.
+- **Corrente**: gestita da un `AnalogInputHandler` interno (ADC calibrato da eFuse + filtro 1° ordine + scaling a Ampere). `GetCurrent()` è già in A, filtrata. Se la calibrazione manca, l'ingresso ripiega sulla scala nominale invece di leggere 0 A (che renderebbe lo stallo impossibile da rilevare): `IsCurrentCalibrated()` lo segnala. Le curve di stallo tarate con le versioni 1.x (letture non calibrate, ~8-9 % più alte del vero sul C3) scattano ora a una corrente reale un po' più alta.
 
 ## Dipendenze
 

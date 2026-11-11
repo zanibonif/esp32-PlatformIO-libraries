@@ -1,6 +1,6 @@
 {
   "name": "DRV8874MotorHandler",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Driver motore DC con DRV8874 (modo PH/EN): velocità con segno, soft-start/cambio a rampa, lettura corrente IPROPI e protezione anti-blocco a tempo.",
   "authors": [
     {

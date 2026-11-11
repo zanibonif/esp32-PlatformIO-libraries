@@ -22,8 +22,12 @@ SECONDS_TO_MICROSECONDS       // 1000000
 ## Versione librerie
 
 ```cpp
-String Version = GetLibrariesVersion();  // es. "1.0.0"
+String Version = GetLibrariesVersion();  // es. "2.0.0"
 ```
+
+La versione della raccolta sta in `System.h` (`LIBRARIES_VERSION_1/2/3`); le singole librerie hanno
+la propria in `library.json`. Le modifiche fra una versione e l'altra stanno in `CHANGELOG.md` alla
+radice del repository.
 
 ## Gestione CPU
 
@@ -47,6 +51,11 @@ Hibernate(30 * SECONDS_TO_MICROSECONDS);   // 30 secondi in deep sleep
 // Al risveglio:
 String Reason = GetWakeUpReason();   // es. "Timer", "External pin"
 ```
+
+`Hibernate()` spegne i domini RTC (periferiche, memoria slow e fast) **solo sui SoC che li hanno**:
+con ESP-IDF 5.x quei domini esistono solo dove `SOC_PM_SUPPORT_*_PD` lo dichiara (il C3 non ne ha
+nessuno dei tre). Su ESP-IDF 4.4 il comportamento resta quello di prima. Funziona con
+Arduino-ESP32 2.x e 3.x.
 
 ## Aritmetica sicura (overflow)
 

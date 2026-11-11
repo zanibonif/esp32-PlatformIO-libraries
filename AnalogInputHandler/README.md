@@ -16,9 +16,8 @@ Pressure.SetName("Pressure");
 Pressure.SetClockTime(100);        // ms — periodo con cui Update() viene chiamato
 Pressure.SetGPIO(1);              // pin ADC1 (vedi "Pin ADC validi per chip")
 
-// Scaling: ADC → tensione → unità ingegneristiche
+// Scaling: tensione calibrata → unità ingegneristiche
 Pressure.SetScaling(
-    3.3f,    // tensione di riferimento (V)
     0.5f,    // tensione minima del trasduttore (V)
     4.5f,    // tensione massima del trasduttore (V)
     0.0f,    // valore minimo in unità ingegneristiche (es. bar)
@@ -50,28 +49,36 @@ Scheduler.AddFunction(ADCTask, []() {
 ## Lettura valori
 
 ```cpp
-float ADC     = Pressure.GetADCValue();    // valore grezzo 0–4095
-float Voltage = Pressure.GetVoltage();     // tensione in V
-float Value   = Pressure.GetValue();       // unità ingegneristiche
+float ADC        = Pressure.GetADCValue();    // conteggi grezzi dell'ultima lettura, 0–4095
+float Voltage    = Pressure.GetVoltage();     // tensione calibrata e filtrata, in V
+float Value      = Pressure.GetValue();       // unità ingegneristiche
+bool  Calibrated = Pressure.IsCalibrated();   // false se è scattato il ripiego sulla scala nominale
 ```
 
 ## Dipendenze
 
 - `TimeDiscreteFilter` (usato internamente)
 - `LoggerHandler`
-- `driver/adc.h` (ESP-IDF)
+- **Arduino-ESP32 3.x** (`analogRead`, `analogReadMilliVolts`, `analogSetPinAttenuation`)
 
-## Pin ADC validi per chip
+## Pin ADC validi
 
-`SetGPIO()` accetta solo i pin ADC del SoC; un pin non valido viene rifiutato con LOG di errore.
-
-| SoC | ADC1 | ADC2 |
-|-----|------|------|
-| ESP32-S3 | GPIO 1–10 | GPIO 11–20 |
-| ESP32-C3 | GPIO 0–4  | GPIO 5     |
+`SetGPIO()` accetta qualunque pin che il core riconosce come ingresso analogico
+(`digitalPinToAnalogChannel()`), su qualunque SoC; un pin non valido viene rifiutato con LOG di
+errore.
 
 ## Note
 
-- **ADC2 è condiviso con il WiFi**: con WiFi attivo le letture su ADC2 possono fallire con `ESP_ERR_TIMEOUT` (loggato come "Wi-Fi conflict"). Preferire i pin ADC1.
-- La risoluzione ADC è 12 bit (0–4095); attenuazione 12 dB (fondoscala ~3.3 V).
-- Driver: legacy `driver/adc.h` (ESP-IDF 4.4). Nessuna calibrazione hardware: la tensione è stimata in modo lineare via `SetScaling`.
+- **Calibrazione**: la tensione viene da `analogReadMilliVolts()`, che applica la calibrazione
+  dell'esemplare scritta in eFuse (curve fitting su C3/S3, line fitting su ESP32/S2). Il filtro
+  lavora sui millivolt calibrati.
+- **Calibrazione assente**: tutti gli errori di `analogReadMilliVolts()` ritornano 0, che
+  sembrerebbe un ingresso a massa. Se i conteggi grezzi superano 100 mentre i mV sono 0,
+  l'ingresso passa alla scala nominale (conteggi / 4095 × 3,3 V), lo scrive a log una volta e
+  `IsCalibrated()` ritorna false.
+- Risoluzione 12 bit (0–4095), attenuazione 12 dB. Sul C3 la lettura è affidabile fino a circa
+  2,5 V e oltre satura verso i 3 V: il fondo scala di un potenziometro va misurato, non assunto
+  a 3,3 V.
+- **ADC2 è condiviso con il WiFi**: preferire i pin ADC1.
+- Il driver ADC legacy (`driver/adc.h`) non può convivere nello stesso firmware con quello che
+  usa il core: questa libreria non va mescolata con codice che usa il driver legacy.

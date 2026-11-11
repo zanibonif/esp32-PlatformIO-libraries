@@ -21,32 +21,19 @@ void AnalogInputHandler::SetGPIO (int Gpio) {
     _GPIO          = Gpio;
     _AdcConfigured = false;
 
-    // Mappa GPIO -> unità/canale, lineare e specifica per SoC
-    bool Valid = false;
-#if CONFIG_IDF_TARGET_ESP32S3
-    if      (_GPIO >= 1  && _GPIO <= 10) { _AdcUnit = 1; _AdcChannel = _GPIO - 1;  Valid = true; }  // ADC1: GPIO1..10
-    else if (_GPIO >= 11 && _GPIO <= 20) { _AdcUnit = 2; _AdcChannel = _GPIO - 11; Valid = true; }  // ADC2: GPIO11..20
-#elif CONFIG_IDF_TARGET_ESP32C3
-    if      (_GPIO >= 0  && _GPIO <= 4)  { _AdcUnit = 1; _AdcChannel = _GPIO;      Valid = true; }  // ADC1: GPIO0..4
-    else if (_GPIO == 5)                 { _AdcUnit = 2; _AdcChannel = 0;          Valid = true; }  // ADC2: GPIO5
-#else
-    #error "AnalogInputHandler: SoC non supportato, aggiungere la mappa ADC"
-#endif
-
-    if (!Valid) {
+    // The core knows the GPIO -> ADC unit/channel map of every SoC: no table to keep here.
+    int Channel = digitalPinToAnalogChannel(_GPIO);
+    if (Channel < 0) {
         LOG(ERROR, _LogName, "GPIO " + String(_GPIO) + " non è un pin ADC valido su questo SoC");
         return;
     }
 
-    if (_AdcUnit == 1) {
-        adc1_config_width(static_cast<adc_bits_width_t>(ADC_WIDTH_BIT_12));
-        adc1_config_channel_atten(static_cast<adc1_channel_t>(_AdcChannel), ADC_ATTEN_DB_12);
-    } else {
-        adc2_config_channel_atten(static_cast<adc2_channel_t>(_AdcChannel), ADC_ATTEN_DB_12);
-    }
+    // 12 dB (ADC_11db is its historical name): the widest range. On the C3 the reading is
+    // reliable up to about 2.5 V and saturates towards 3 V above that.
+    analogSetPinAttenuation(_GPIO, ADC_11db);
 
     _AdcConfigured = true;
-    LOG(INFO, _LogName, "GPIO " + String(_GPIO) + " -> ADC" + String(_AdcUnit) + " CH" + String(_AdcChannel));
+    LOG(INFO, _LogName, "GPIO " + String(_GPIO) + " -> ADC channel " + String(Channel));
     _InputFilter.Reset();
 }
 
@@ -56,8 +43,7 @@ void AnalogInputHandler::SetInputFilterTimeConstant (unsigned long FilterTimeCon
     _InputFilterTimeConstantSet = true;
 }
 
-void AnalogInputHandler::SetScaling (float VoltageReference, float MinVoltage, float MaxVoltage, float MinEngineeringUnit, float MaxEngineeringUnit) {
-    _InputVoltageReference          = VoltageReference;
+void AnalogInputHandler::SetScaling (float MinVoltage, float MaxVoltage, float MinEngineeringUnit, float MaxEngineeringUnit) {
     _InputScalingMinVoltage         = MinVoltage;
     _InputScalingMaxVoltage         = MaxVoltage;
     _InputScalingMinEngineeringUnit = MinEngineeringUnit;
@@ -81,24 +67,29 @@ void AnalogInputHandler::Update () {
         return;
     }
 
-    if (_AdcUnit == 1) {
-        int RawValue = adc1_get_raw(static_cast<adc1_channel_t>(_AdcChannel));
-        if (RawValue < 0) { LOG(ERROR, _LogName, "ADC1 read error"); }
-        else              { _InputADCValue = (float)RawValue; }
-    } else {
-        int       RawValue = 0;
-        esp_err_t Result   = adc2_get_raw(static_cast<adc2_channel_t>(_AdcChannel), ADC_WIDTH_BIT_12, &RawValue);
-        if      (Result == ESP_OK)          { _InputADCValue = (float)RawValue; }
-        else if (Result == ESP_ERR_TIMEOUT) { LOG(ERROR, _LogName, "ADC read error: Wi-Fi conflict"); }
-        else                                { LOG(ERROR, _LogName, "ADC read error: " + String(esp_err_to_name(Result))); }
+    int RawValue   = analogRead(_GPIO);
+    int MilliVolts = analogReadMilliVolts(_GPIO);
+    _InputADCValue = (float)RawValue;
+
+    // Every error path of analogReadMilliVolts() returns 0, so a missing calibration looks
+    // exactly like a grounded input. A real signal on the raw counts with 0 mV can only be
+    // that: from then on the input uses the nominal linear scale. Without this check a
+    // current input would read 0 A for ever, and a stall would never be detected.
+    if (_CalibrationAvailable && (RawValue > CALIBRATION_CHECK_MIN_RAW) && (MilliVolts == 0)) {
+        _CalibrationAvailable = false;
+        LOG(ERROR, _LogName, "Calibrazione ADC non disponibile (raw " + String(RawValue) + ", 0 mV): si usa la scala nominale");
     }
 
-    _InputFilteredADCValue = _InputFilterTimeConstantSet
-        ? _InputFilter.Filter(_InputADCValue)
-        : _InputADCValue;
+    _InputMilliVolts = _CalibrationAvailable
+        ? (float)MilliVolts
+        : ((float)RawValue / (float)_InputResolution) * NOMINAL_FULL_SCALE_MILLIVOLTS;
+
+    _InputFilteredMilliVolts = _InputFilterTimeConstantSet
+        ? _InputFilter.Filter(_InputMilliVolts)
+        : _InputMilliVolts;
 
     if (_InputScalingSet) {
-        _VoltageValue = (_InputFilteredADCValue / (float)_InputResolution) * _InputVoltageReference;
+        _VoltageValue = _InputFilteredMilliVolts / 1000.0f;
 
         float EngineeringUnitValue = _VoltageValue * _VoltageToEngineeringUnitScaleFactor + _VoltageToEngineeringUnitOffset;
 
@@ -119,7 +110,7 @@ String AnalogInputHandler::GetName () {
 }
 
 float AnalogInputHandler::GetADCValue () {
-    return _InputFilteredADCValue;
+    return _InputADCValue;
 }
 
 float AnalogInputHandler::GetVoltage () {
@@ -128,4 +119,8 @@ float AnalogInputHandler::GetVoltage () {
 
 float AnalogInputHandler::GetValue () {
     return _EngineeringUnitValue;
+}
+
+bool AnalogInputHandler::IsCalibrated () const {
+    return _CalibrationAvailable;
 }
