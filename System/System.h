@@ -8,6 +8,9 @@
 //    Global constant
 // ----------------------------
 
+#define INIT 0
+#define RUN  1
+
 #define LIBRARIES_VERSION_1            2
 #define LIBRARIES_VERSION_2            0
 #define LIBRARIES_VERSION_3            0
@@ -29,6 +32,7 @@ void               SetCpuFrequency (unsigned int CpuFrequency);
 unsigned int       GetCpuFrequency ();
 void               SetSystemTime (DateTimeProvider& Provider);
 unsigned long long GetUptimeUs ();
+unsigned long long GetUptimeS ();
 
 // ----------------------------
 //    Safe arithmetic

@@ -1,6 +1,6 @@
 {
   "name": "I2cBusHandler",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Gestione bus I2C: inizializzazione, mutex di bus e monitoraggio disponibilità dispositivi.",
   "authors": [
     {

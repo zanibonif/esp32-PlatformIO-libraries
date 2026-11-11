@@ -39,82 +39,6 @@ void I2cBusHandler::SetFrequency (uint32_t Frequency)
     _Frequency = Frequency;
 }
 
-void I2cBusHandler::SetClockTime (unsigned long ClockTime)
-{
-    _ClockTime = ClockTime;
-    for (int Index = 0; Index < I2C_BUS_HANDLER_MAX_DEVICES; Index++) {
-        if (_Devices[Index].Used) {
-            _Devices[Index].DeviceAvailableSignal.SetClockTime(_ClockTime);
-        }
-    }
-}
-
-// --- Configurazione dispositivi ---
-
-void I2cBusHandler::AddDevice (uint8_t Address, const String& Name)
-{
-    if (_FindDevice(Address) != -1) {
-        LOG(WARNING, "I2cBusHandler", "Dispositivo 0x" + String(Address, HEX) + " già registrato");
-        return;
-    }
-
-    for (int Index = 0; Index < I2C_BUS_HANDLER_MAX_DEVICES; Index++) {
-        if (!_Devices[Index].Used) {
-            _Devices[Index].Used    = true;
-            _Devices[Index].Address = Address;
-            _Devices[Index].DeviceAvailableSignal.SetName(Name + " (0x" + String(Address, HEX) + ") available ");
-            _Devices[Index].DeviceAvailableSignal.SetClockTime(_ClockTime);
-            _Devices[Index].DeviceAvailableSignal.SetActivationDelay(I2C_BUS_HANDLER_DEFAULT_AVAILABLE_DELAY);
-            _Devices[Index].DeviceAvailableSignal.SetDeactivationDelay(0);
-            _Devices[Index].DeviceAvailableSignal.Enable();
-            LOG(INFO, "I2cBusHandler", "Dispositivo " + Name + " registrato a 0x" + String(Address, HEX));
-            return;
-        }
-    }
-
-    LOG(ERROR, "I2cBusHandler", "Registrazione 0x" + String(Address, HEX) + " fallita: nessuno slot libero");
-}
-
-void I2cBusHandler::SetAvailableCallback (uint8_t Address, EdgeCallback Callback)
-{
-    int Index = _FindDevice(Address);
-    if (Index == -1) {
-        LOG(ERROR, "I2cBusHandler", "SetAvailableCallback: dispositivo 0x" + String(Address, HEX) + " non registrato");
-        return;
-    }
-    _Devices[Index].DeviceAvailableSignal.SetActivationCallback(Callback);
-}
-
-void I2cBusHandler::SetUnavailableCallback (uint8_t Address, EdgeCallback Callback)
-{
-    int Index = _FindDevice(Address);
-    if (Index == -1) {
-        LOG(ERROR, "I2cBusHandler", "SetUnavailableCallback: dispositivo 0x" + String(Address, HEX) + " non registrato");
-        return;
-    }
-    _Devices[Index].DeviceAvailableSignal.SetDeactivationCallback(Callback);
-}
-
-void I2cBusHandler::SetAvailableDelay (uint8_t Address, unsigned long Delay)
-{
-    int Index = _FindDevice(Address);
-    if (Index == -1) {
-        LOG(ERROR, "I2cBusHandler", "SetAvailableDelay: dispositivo 0x" + String(Address, HEX) + " non registrato");
-        return;
-    }
-    _Devices[Index].DeviceAvailableSignal.SetActivationDelay(Delay);
-}
-
-void I2cBusHandler::SetUnavailableDelay (uint8_t Address, unsigned long Delay)
-{
-    int Index = _FindDevice(Address);
-    if (Index == -1) {
-        LOG(ERROR, "I2cBusHandler", "SetUnavailableDelay: dispositivo 0x" + String(Address, HEX) + " non registrato");
-        return;
-    }
-    _Devices[Index].DeviceAvailableSignal.SetDeactivationDelay(Delay);
-}
-
 // --- Controllo runtime ---
 
 void I2cBusHandler::Enable ()
@@ -133,14 +57,12 @@ void I2cBusHandler::Disable ()
     LOG(INFO, "I2cBusHandler", "Disabilitato");
 }
 
-// --- Stato / accesso bus ---
-
-bool I2cBusHandler::IsAvailable (uint8_t Address) const
+bool I2cBusHandler::IsReady () const
 {
-    int Index = _FindDevice(Address);
-    if (Index == -1) return false;
-    return _Devices[Index].DeviceAvailableSignal.GetFilteredSignal();
+    return _Enabled && _Initialized;
 }
+
+// --- Accesso al bus ---
 
 bool I2cBusHandler::TakeBus (unsigned long MaxWaitTime)
 {
@@ -152,6 +74,64 @@ void I2cBusHandler::GiveBus ()
 {
     if (!_Mutex) return;
     xSemaphoreGive(_Mutex);
+}
+
+bool I2cBusHandler::Probe (uint8_t Address)
+{
+    if (!IsReady()) return false;
+    if (!TakeBus())  return false;
+
+    bool Present = _Probe(Address);
+
+    GiveBus();
+    return Present;
+}
+
+bool I2cBusHandler::Scan (ScanFoundCallback OnFound, uint8_t* FoundCount)
+{
+    if (FoundCount) *FoundCount = 0;
+
+    if (!IsReady()) {
+        LOG(ERROR, "I2cBusHandler", "Scan: bus non pronto");
+        return false;
+    }
+
+    // Il mutex si tiene per tutta la spazzata: prenderlo e rilasciarlo a ogni
+    // indirizzo lascerebbe entrare una transazione di un driver a meta' scansione,
+    // e la fotografia uscirebbe incoerente.
+    if (!TakeBus()) {
+        LOG(WARNING, "I2cBusHandler", "Scan: bus occupato");
+        return false;
+    }
+
+    uint8_t Count = 0;
+    for (uint8_t Address = I2C_BUS_HANDLER_FIRST_SCAN_ADDRESS; Address <= I2C_BUS_HANDLER_LAST_SCAN_ADDRESS; Address++) {
+        if (!_Probe(Address)) continue;
+        Count++;
+        if (OnFound) OnFound(Address);
+    }
+
+    GiveBus();
+
+    if (FoundCount) *FoundCount = Count;
+    return true;
+}
+
+// --- Diagnostica ---
+
+uint8_t I2cBusHandler::GetSdaPin () const
+{
+    return _SdaPin;
+}
+
+uint8_t I2cBusHandler::GetSclPin () const
+{
+    return _SclPin;
+}
+
+uint32_t I2cBusHandler::GetFrequency () const
+{
+    return _Frequency;
 }
 
 // --- Chiamato ciclicamente ---
@@ -166,31 +146,19 @@ void I2cBusHandler::Loop ()
         }
         return;
     }
-    if (!_Enabled) return;
+    if (!_Enabled)    return;
+    if (_Initialized) return;
 
-    // Inizializzazione del bus al primo ciclo da abilitato (Enable è flag-only)
-    if (!_Initialized) {
-        if (_WirePort->begin(_SdaPin, _SclPin, _Frequency)) {
-            _Initialized = true;
-            LOG(INFO, "I2cBusHandler", "Bus inizializzato (SDA: " + String(_SdaPin) + ", SCL: " + String(_SclPin) +
-                ", " + String(_Frequency / 1000) + " kHz)");
-        } else {
-            static bool InitErrorLogged = false;
-            if (!InitErrorLogged) {
-                LOG(ERROR, "I2cBusHandler", "Inizializzazione bus fallita");
-                InitErrorLogged = true;
-            }
-        }
-        return;
-    }
-
-    for (int Index = 0; Index < I2C_BUS_HANDLER_MAX_DEVICES; Index++) {
-        if (!_Devices[Index].Used) continue;
-
-        if (TakeBus()) {
-            bool Present = _Probe(_Devices[Index].Address);
-            GiveBus();
-            _Devices[Index].DeviceAvailableSignal.Update(Present);
+    // Inizializzazione del bus al primo ciclo da abilitato (Enable e' flag-only)
+    if (_WirePort->begin(_SdaPin, _SclPin, _Frequency)) {
+        _Initialized = true;
+        LOG(INFO, "I2cBusHandler", "Bus inizializzato (SDA: " + String(_SdaPin) + ", SCL: " + String(_SclPin) +
+            ", " + String(_Frequency / 1000) + " kHz)");
+    } else {
+        static bool InitErrorLogged = false;
+        if (!InitErrorLogged) {
+            LOG(ERROR, "I2cBusHandler", "Inizializzazione bus fallita");
+            InitErrorLogged = true;
         }
     }
 }
@@ -200,16 +168,6 @@ void I2cBusHandler::Loop ()
 bool I2cBusHandler::_SetupReady () const
 {
     return _SdaPin != 255 && _SclPin != 255;
-}
-
-int I2cBusHandler::_FindDevice (uint8_t Address) const
-{
-    for (int Index = 0; Index < I2C_BUS_HANDLER_MAX_DEVICES; Index++) {
-        if (_Devices[Index].Used && _Devices[Index].Address == Address) {
-            return Index;
-        }
-    }
-    return -1;
 }
 
 bool I2cBusHandler::_Probe (uint8_t Address)

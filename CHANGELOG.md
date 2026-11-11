@@ -1,5 +1,44 @@
 # Changelog
 
+## Non ancora rilasciato
+
+### ⚠️ Cambiamenti incompatibili
+
+- **`I2cBusHandler` 2.0.0 — la presenza dei dispositivi esce dalla libreria.** Rimossi
+  `AddDevice()`, `IsAvailable()`, `SetAvailableCallback()`, `SetUnavailableCallback()`,
+  `SetAvailableDelay()`, `SetUnavailableDelay()` e `SetClockTime()`. Con essi spariscono il
+  registro dei dispositivi, il limite `I2C_BUS_HANDLER_MAX_DEVICES` e il probe periodico.
+  La libreria ora **possiede il bus** e nient'altro: porta, pin, frequenza, inizializzazione
+  differita, mutex, più `Probe()` su un indirizzo e `Scan()` su tutto il bus.
+
+- **`DS3231_RtcHandler` 2.0.0 — si gestisce la propria presenza.** Tiene un
+  `DigitalSignalHandler` suo, alimentato dall'esito delle letture vere quando il modulo è
+  presente e da `I2cBus.Probe()` a intervalli quando lo crede assente. Nuovi
+  `SetClockTime()`, `SetAvailableDelay()`, `SetUnavailableDelay()`,
+  `SetAvailableCallback()`, `SetUnavailableCallback()`. `IsAvailable()` resta identico, quindi
+  **il codice applicativo non cambia**: nel firmware Nixie si è spostata una sola riga, da
+  `I2cBus.SetClockTime(...)` a `Rtc.SetClockTime(...)`.
+
+**Perché.** Dall'ESP-IDF 5.4 il core Arduino compila `esp32-hal-i2c-ng.c`, sul driver
+`i2c_master`: una scrittura a zero byte diventa `i2c_master_probe()` sull'handle del **bus**,
+ogni altra transazione passa da un handle di **dispositivo** creato per indirizzo. Il probe
+periodico alternava le due API sullo stesso indirizzo dieci volte al secondo. Ora i due casi si
+escludono per costruzione — chi sonda non transa, chi transa non sonda — e in regime normale
+`i2c_master_probe()` viene chiamata solo da `Scan()`, cioè a comando.
+
+### Aggiunto
+
+- **`LoggerHandler` 1.1.0 — separatore di avvio nel log su file.** `EnableFileLog()` scrive
+  `LOGGER_FILE_SEPARATOR` (60 trattini, override-abile da `build_flags`) come primissima riga
+  del file, per distinguere i riavvii in un log che si accumula. Solo su file: su Serial e
+  WebSerial ogni sessione è già separata. `EnableFileLog()` è diventata idempotente, come
+  vuole la convenzione per le `Enable()`.
+- **`I2cBusHandler`**: `Probe(Address)`, `Scan(OnFound, FoundCount)`, `IsReady()`,
+  `GetSdaPin()`, `GetSclPin()`, `GetFrequency()`.
+- **`RadarHandler`** (libreria locale del progetto Nixie): dieci getter sui dati dell'ultimo
+  frame — distanze e intensità del bersaglio in movimento e di quello fermo, stato in chiaro,
+  versione firmware del sensore, conteggio frame.
+
 ## 2.0.0_rc1 — 11/11/2026
 
 Migrazione ad **Arduino-ESP32 3.3.12 / ESP-IDF 5.5.5** (PlatformIO `espressif32@8.0.0`).

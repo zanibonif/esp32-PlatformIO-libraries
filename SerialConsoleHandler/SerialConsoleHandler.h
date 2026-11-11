@@ -12,6 +12,9 @@
 #ifndef SERIAL_CONSOLE_EXIT_KEY
 #define SERIAL_CONSOLE_EXIT_KEY   0x1B   // ESC: "back" universale
 #endif
+#ifndef SERIAL_CONSOLE_INPUT_TIMEOUT_MS
+#define SERIAL_CONSOLE_INPUT_TIMEOUT_MS 15000   // attesa massima su una richiesta di valore
+#endif
 
 class SerialConsoleHandler {
 public:
@@ -21,6 +24,25 @@ public:
 
     // Configurazione (setup)
     void AddMenuItem (const String& Label, std::function<void()> Action);
+
+    // Da usare DENTRO un'azione di menu, per chiedere un valore all'operatore.
+    // Stampa il prompt, legge cifre con echo e backspace, accetta con INVIO. Se
+    // MinValue e' negativo accetta anche il segno meno come primo carattere.
+    //
+    // E' bloccante con timeout: l'azione gira dentro Loop(), quindi il task che la
+    // ospita resta fermo per l'attesa. Va bene perche' e' un comando manuale — la
+    // stessa cosa fa la voce built-in che riversa il log su seriale — ma il task
+    // che ospita la console deve avere una deadline tollerante.
+    //
+    // Ritorna false su ESC, valore fuori intervallo o timeout: in quei casi Value
+    // non viene toccato.
+    bool ReadNumber (const String& Prompt, int MinValue, int MaxValue, int& Value, unsigned long TimeoutMs = SERIAL_CONSOLE_INPUT_TIMEOUT_MS);
+
+    // Come ReadNumber ma per una riga di testo, lunga al massimo MaxLength caratteri
+    // (ASCII stampabili, spazi compresi). Con MaskEcho l'eco e' di asterischi, per le
+    // password. La stringa vuota e' un valore valido — le reti aperte non hanno
+    // password — quindi qui INVIO conferma sempre: per annullare c'e' ESC.
+    bool ReadText (const String& Prompt, uint8_t MaxLength, String& Value, bool MaskEcho = false, unsigned long TimeoutMs = SERIAL_CONSOLE_INPUT_TIMEOUT_MS);
 
     // Controllo runtime
     void Enable ();
@@ -41,6 +63,7 @@ private:
 
     // Setup interno
     void _RegisterBuiltins ();
+    void _DrainInput ();   // butta l'input accodato prima di una richiesta di valore
 
     // Navigazione / input
     void _ProcessInput ();

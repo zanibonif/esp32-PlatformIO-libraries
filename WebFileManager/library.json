@@ -1,0 +1,32 @@
+{
+  "name": "WebFileManager",
+  "version": "1.0.0",
+  "description": "File manager web su LittleFS accessibile via browser: UI HTML e API REST per navigare, caricare, scaricare, cancellare file e creare cartelle.",
+  "authors": [
+    {
+      "name": "Filippo Maria Zaniboni",
+      "email": "filippo.zaniboni.88@gmail.com"
+    }
+  ],
+  "frameworks": ["arduino"],
+  "platforms": ["espressif32"],
+  "dependencies": [
+    {
+      "name": "ESPAsyncWebServer",
+      "version": "^3.7.3",
+      "repository": {
+        "type": "git",
+        "url": "https://github.com/esp32async/ESPAsyncWebServer.git"
+      }
+    },
+    {
+      "name": "LittleFSHandler"
+    },
+    {
+      "name": "LoggerHandler"
+    }
+  ],
+  "build": {
+    "srcFilter": ["+<*>"]
+  }
+}

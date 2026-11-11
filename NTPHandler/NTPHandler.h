@@ -5,6 +5,12 @@
 #include <System.h>
 #include "DateTimeProvider.h"
 
+// Server di riferimento: uno solo, il pool pubblico. Si sovrascrive con un -D se
+// un impianto ha un server interno.
+#ifndef NTP_SERVER_NAME
+#define NTP_SERVER_NAME "pool.ntp.org"
+#endif
+
 typedef void (*TimeSyncCallback)();
 
 class NtpHandler : public DateTimeProvider {
@@ -28,6 +34,19 @@ public:
 
     // Diagnostica
     bool          IsConnected ();
+    bool          IsEnabled ();
+    const char*   GetStateText ();          // stato della macchina, in chiaro
+    const char*   GetServerName ();
+    int           GetGmtOffset ();          // ore
+    unsigned long GetUpdateInterval ();     // millisecondi
+    // Tempo trascorso dall'ultima sincronizzazione andata a buon fine, in
+    // millisecondi. Vale zero se non e' mai stata fatta: va letto assieme a
+    // IsConnected(), che dice se quel valore ha un senso.
+    unsigned long GetTimeSinceLastSync ();
+    // False fino alla prima sincronizzazione riuscita: distingue "non ho ancora
+    // mai preso l'ora" da "l'ho presa e poi l'ho persa", che in diagnostica sono
+    // due guasti diversi.
+    bool          HasSynchronized ();
     String        GetFormattedTime (const String& Format = "%H:%M:%S") override;
     unsigned long GetEpochTime () override;
 
@@ -53,6 +72,9 @@ private:
     unsigned long    _UpdateInterval      = 60000; // milliseconds
     unsigned long    _UpdateTimeout       = 5000;  // milliseconds
     NtpState         _State               = NOT_CONNECTED;
+    int              _GmtOffsetHours      = 0;
+    bool             _Synchronized        = false;
+    unsigned long    _TimeSinceLastSync   = ZERO_TIME; // millisecondi, cresce di _ClockTime per ciclo
 
     TimeSyncCallback _OnSyncCallback      = nullptr;
     TimeSyncCallback _OnDesyncCallback    = nullptr;

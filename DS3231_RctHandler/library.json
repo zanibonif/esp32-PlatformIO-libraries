@@ -1,6 +1,6 @@
 {
   "name": "DS3231_RtcHandler",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Singleton class to manage DS3231 RTC on ESP32 with PlatformIO, inspired by NtpHandler design",
   "authors": [
     {

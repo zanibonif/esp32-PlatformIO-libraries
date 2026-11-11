@@ -7,12 +7,20 @@ DS3231_RtcHandler& DS3231_RtcHandler::GetInstance () {
 DS3231_RtcHandler& Rtc = DS3231_RtcHandler::GetInstance();
 
 DS3231_RtcHandler::DS3231_RtcHandler () {
-    // Alias I2cBus non ancora affidabile durante l'init statico: usare GetInstance()
-    I2cBusHandler::GetInstance().AddDevice(DS3231_RTC_I2C_ADDRESS, "DS3231");
+    _PresenceSignal.SetName("DS3231 (0x68) available ");
+    _PresenceSignal.SetClockTime(_ClockTime);
+    _PresenceSignal.SetActivationDelay(DS3231_RTC_DEFAULT_AVAILABLE_DELAY);
+    _PresenceSignal.SetDeactivationDelay(0);
+    _PresenceSignal.Enable();
     LOG(INFO, _LogName, "Instance created");
 }
 
 // --- Configurazione ---
+
+void DS3231_RtcHandler::SetClockTime (unsigned long ClockTime) {
+    _ClockTime = ClockTime;
+    _PresenceSignal.SetClockTime(_ClockTime);
+}
 
 void DS3231_RtcHandler::SetDateTime (uint16_t Year, uint8_t Month, uint8_t Day, uint8_t Hour, uint8_t Minute, uint8_t Second) {
     if (!_Enabled || !_Initialized || !IsAvailable()) {
@@ -32,6 +40,22 @@ void DS3231_RtcHandler::SetDateTime (uint16_t Year, uint8_t Month, uint8_t Day, 
     char Buffer[32];
     snprintf(Buffer, sizeof(Buffer), "%02u/%02u/%04u %02u:%02u:%02u", Day, Month, Year, Hour, Minute, Second);
     LOG(INFO, _LogName, "RTC time set to " + String(Buffer));
+}
+
+void DS3231_RtcHandler::SetAvailableDelay (unsigned long Delay) {
+    _PresenceSignal.SetActivationDelay(Delay);
+}
+
+void DS3231_RtcHandler::SetUnavailableDelay (unsigned long Delay) {
+    _PresenceSignal.SetDeactivationDelay(Delay);
+}
+
+void DS3231_RtcHandler::SetAvailableCallback (EdgeCallback Callback) {
+    _PresenceSignal.SetActivationCallback(Callback);
+}
+
+void DS3231_RtcHandler::SetUnavailableCallback (EdgeCallback Callback) {
+    _PresenceSignal.SetDeactivationCallback(Callback);
 }
 
 // --- Controllo runtime ---
@@ -55,7 +79,7 @@ bool DS3231_RtcHandler::IsEnabled () const {
 }
 
 bool DS3231_RtcHandler::IsAvailable () const {
-    return I2cBus.IsAvailable(DS3231_RTC_I2C_ADDRESS);
+    return _PresenceSignal.GetFilteredSignal();
 }
 
 // --- Metodi principali ---
@@ -98,35 +122,60 @@ String DS3231_RtcHandler::GetFormattedTime (const String& Format) {
 void DS3231_RtcHandler::Loop () {
     if (!_Enabled) return;
 
-    if (!I2cBus.IsAvailable(DS3231_RTC_I2C_ADDRESS)) {
+    bool TransactionOk = false;
+
+    if (_PresenceSignal.GetFilteredSignal()) {
+        // Modulo presente: la disponibilita' si deduce dall'esito delle transazioni
+        // vere, senza aggiungere traffico sul bus. Niente sondaggi in questo ramo.
+        TransactionOk = _Initialized ? _ReadDateTime() : _InitializeChip();
+    } else {
+        // Modulo assente: si sonda a intervalli per accorgersi che e' tornato. Fra un
+        // sondaggio e l'altro si tiene l'ultimo esito, altrimenti il segnale non
+        // raggiungerebbe mai il ritardo di attivazione.
+        _Initialized = false;
         _CachedEpoch = 0;
-        return;
+
+        if (_ProbeTimer > _ClockTime) {
+            _ProbeTimer = _ProbeTimer - _ClockTime;
+        } else {
+            _ProbeTimer  = DS3231_RTC_PROBE_INTERVAL;
+            _LastProbeOk = I2cBus.Probe(DS3231_RTC_I2C_ADDRESS);
+        }
+        TransactionOk = _LastProbeOk;
     }
 
-    // Inizializzazione del chip alla prima disponibilità del modulo
-    if (!_Initialized) {
-        if (!I2cBus.TakeBus()) return;
+    _PresenceSignal.Update(TransactionOk);
+}
 
-        bool BeginOk = _Rtc.begin();
-        if (BeginOk && _Rtc.lostPower()) {
-            LOG(WARNING, _LogName, "RTC lost power, setting to compile time");
-            _Rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-        }
-        I2cBus.GiveBus();
+// --- Internals ---
 
-        if (!BeginOk) {
-            LOG(ERROR, _LogName, "DS3231 begin failed");
-            return;
-        }
+bool DS3231_RtcHandler::_InitializeChip () {
+    if (!I2cBus.TakeBus()) return true;   // bus occupato: non e' un'assenza, si riprova
 
-        _Initialized = true;
-        LOG(INFO, _LogName, "RTC initialized");
-        return;
+    bool BeginOk = _Rtc.begin();
+    if (BeginOk && _Rtc.lostPower()) {
+        LOG(WARNING, _LogName, "RTC lost power, setting to compile time");
+        _Rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+    }
+    I2cBus.GiveBus();
+
+    if (!BeginOk) {
+        LOG(ERROR, _LogName, "DS3231 begin failed");
+        return false;
     }
 
-    if (!I2cBus.TakeBus()) return;   // bus occupato: la cache resta l'ultima lettura valida
+    _Initialized = true;
+    LOG(INFO, _LogName, "RTC initialized");
+    return true;
+}
+
+bool DS3231_RtcHandler::_ReadDateTime () {
+    if (!I2cBus.TakeBus()) return true;   // bus occupato: la cache resta l'ultima valida
+
     DateTime Now = _Rtc.now();
     I2cBus.GiveBus();
 
-    _CachedEpoch = Now.isValid() ? Now.unixtime() : 0;
+    bool Valid   = Now.isValid();
+    _CachedEpoch = Valid ? Now.unixtime() : 0;
+    return Valid;
 }

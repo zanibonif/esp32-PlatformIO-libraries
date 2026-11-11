@@ -8,7 +8,7 @@ NtpHandler& NtpHandler::GetInstance () {
 NtpHandler& Ntp = NtpHandler::GetInstance();
 
 NtpHandler::NtpHandler ()
-    : _NtpClient(_Udp, "pool.ntp.org", 0, 60000) {
+    : _NtpClient(_Udp, NTP_SERVER_NAME, 0, 60000) {
     LOG(INFO, _LogName, "Istanza creata");
 }
 
@@ -18,6 +18,7 @@ void NtpHandler::SetClockTime (unsigned long ClockTime) {
 }
 
 void NtpHandler::SetGmtOffset (int GmtOffsetHours) {
+    _GmtOffsetHours = GmtOffsetHours;
     _NtpClient.setTimeOffset(GmtOffsetHours * 3600);
     LOG(INFO, _LogName, "GMT offset impostato a " + String(GmtOffsetHours) + " ore");
 }
@@ -57,6 +58,38 @@ bool NtpHandler::IsConnected () {
     return _Connected;
 }
 
+bool NtpHandler::IsEnabled () {
+    return _Enabled;
+}
+
+const char* NtpHandler::GetStateText () {
+    switch (_State) {
+        case CONNECTION_IN_PROGRESS: return "sync in progress";
+        case CONNECTED:              return "connected";
+        default:                     return "not connected";
+    }
+}
+
+const char* NtpHandler::GetServerName () {
+    return NTP_SERVER_NAME;
+}
+
+int NtpHandler::GetGmtOffset () {
+    return _GmtOffsetHours;
+}
+
+unsigned long NtpHandler::GetUpdateInterval () {
+    return _UpdateInterval;
+}
+
+unsigned long NtpHandler::GetTimeSinceLastSync () {
+    return _TimeSinceLastSync;
+}
+
+bool NtpHandler::HasSynchronized () {
+    return _Synchronized;
+}
+
 String NtpHandler::GetFormattedTime (const String& Format) {
     unsigned long RawTime = _NtpClient.getEpochTime();
     time_t Time = static_cast<time_t>(RawTime);
@@ -83,6 +116,11 @@ void NtpHandler::Loop () {
     }
     Timeout = (Timer == ZERO_TIME);
 
+    // Eta' dell'ultima sincronizzazione: si somma un ciclo per volta, come i timer
+    // di questa libreria si sottraggono. Serve a dire in diagnostica quanto e'
+    // vecchia l'ora che stiamo dando, non solo se la connessione c'e'.
+    _TimeSinceLastSync = _TimeSinceLastSync + _ClockTime;
+
     switch (_State) {
         case NOT_CONNECTED:
             if (_Enabled) {
@@ -102,6 +140,8 @@ void NtpHandler::Loop () {
             } else if (_NtpClient.forceUpdate()) {
                 LOG(INFO, _LogName, "Tempo sincronizzato: " + GetFormattedTime("%d/%m/%Y %H:%M:%S"));
                 LOG(INFO, _LogName, "Sincronizzazione automatica ogni " + String(_UpdateInterval) + " millisecondi abilitata");
+                _Synchronized      = true;
+                _TimeSinceLastSync = ZERO_TIME;
                 if (_OnSyncCallback) _OnSyncCallback();
                 Timer = _UpdateInterval + _UpdateTimeout;
                 _State = CONNECTED;
@@ -119,6 +159,7 @@ void NtpHandler::Loop () {
                 LOG(INFO, _LogName, "Sincronizzazione fermata");
                 _State = NOT_CONNECTED;
             } else if (_NtpClient.update()) {
+                _TimeSinceLastSync = ZERO_TIME;
                 Timer = _UpdateInterval + _UpdateTimeout;
             } else if (Timeout) {
                 LOG(WARNING, _LogName, "Timeout aggiornamento NTP - sincronizzazione persa");

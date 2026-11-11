@@ -103,6 +103,23 @@ Logger.EnableFileLog();
 
 `SetClockTime` serve al timer di scrittura periodica (il Logger non usa `millis()`): va impostato al periodo del task che chiama `Loop()`.
 
+### Separatore di avvio
+
+`EnableFileLog()` scrive `LOGGER_FILE_SEPARATOR` come **primissima riga del file**, per distinguere i riavvii in un log che si accumula fra un'accensione e l'altra:
+
+```
+------------------------------------------------------------
+[INFO] 11/11/2026 19:32:04 | setup | Configurazione di scheda: Banco ESP32
+[INFO] 11/11/2026 19:32:04 | setup | Boot n. 42
+...
+```
+
+Finisce **solo su file**: su Serial e WebSerial ogni sessione è già separata di per sé.
+
+È davvero la prima riga, anche se nel `setup()` hai già loggato qualcosa prima di abilitare il log su file: quei messaggi sono ancora in coda e vengono formattati dalla prima `Loop()`, quindi compaiono **dopo** il separatore. Non ci finisce invece l'ora del riavvio, perché al momento di `EnableFileLog()` l'RTC tipicamente non è ancora disponibile: il timestamp lo porta la prima riga vera subito sotto.
+
+`EnableFileLog()` è idempotente, quindi chiamarla due volte non duplica il separatore.
+
 ### API
 
 ```cpp
@@ -135,6 +152,7 @@ Quando `file0` raggiunge `LOGGER_FILE_MAX_SIZE`: `file1` viene cancellato, `file
 | `LOGGER_FILE_BUFFER_SIZE` | 4096 | buffer RAM prima della scrittura |
 | `LOGGER_FILE_MAX_SIZE` | 100000 | dimensione max per file (→ ~2× totale) |
 | `LOGGER_FILE_WRITE_INTERVAL_MS` | 30000 | scrittura periodica |
+| `LOGGER_FILE_SEPARATOR` | 80 trattini | riga di separazione fra i riavvii, scritta da `EnableFileLog()` |
 
 > Le operazioni su file sono protette da un mutex interno (`_FileLogSemaphore`): una lettura (`ReadFullLog`) può convivere con le scritture della `Loop()`. Sotto logging molto fitto, durante una lettura lunga qualche riga può andare persa — segnalata con un marcatore nel file e una riga su seriale.
 

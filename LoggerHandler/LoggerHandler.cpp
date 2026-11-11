@@ -242,6 +242,8 @@ void LoggerHandler::_FormatLog (const LogEntry& Entry, char* Buffer, size_t Buff
 // --- Log su file (LittleFS) ---
 
 void LoggerHandler::EnableFileLog () {
+    if (_FileLogEnabled) return;
+
     // Filesystem gia' montato esternamente: niente begin(). _File0Size riletta dal
     // disco per il recovery dopo un reset.
     if (xSemaphoreTake(_FileLogSemaphore, portMAX_DELAY) == pdTRUE){
@@ -261,6 +263,8 @@ void LoggerHandler::EnableFileLog () {
     _ForceWrite          = false;
     _WriteTimer          = LOGGER_FILE_WRITE_INTERVAL_MS;
     _FileLogEnabled      = true;
+
+    _AppendToBuffer(LOGGER_FILE_SEPARATOR);
 }
 
 void LoggerHandler::DisableFileLog ()

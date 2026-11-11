@@ -1,12 +1,23 @@
 # I2cBusHandler
 
-Gestione del bus I2C come risorsa condivisa: inizializzazione (pin, frequenza), mutex di bus e monitoraggio della disponibilità dei dispositivi registrati tramite probe periodico (`beginTransmission` + `endTransmission`).
+Possiede il bus I2C come risorsa condivisa: porta, pin, frequenza, inizializzazione differita e mutex. Offre il sondaggio di un indirizzo (`Probe()`) e la scansione dell'intero bus (`Scan()`).
 
-**Non gestisce la comunicazione**: read/write restano a carico dei driver dei singoli dispositivi (RTClib, ecc.), che però possono consultare `IsAvailable()` prima di transare — evitando letture spazzatura da dispositivi assenti — e serializzare l'accesso al bus con `TakeBus()`/`GiveBus()`.
+**Non gestisce la comunicazione**: read/write restano ai driver dei singoli dispositivi (RTClib, ecc.), che serializzano le sequenze indivisibili con `TakeBus()`/`GiveBus()`.
 
-Ogni dispositivo registrato ha un `DigitalSignalHandler` interno: la disponibilità è filtrata con un ritardo di attivazione (default **250 ms**, ovvero qualche ciclo di probe stabile prima di dichiarare il dispositivo di nuovo disponibile) ed espone callback sui fronti di connessione/disconnessione.
+**Non tiene un registro dei dispositivi e non ne monitora la presenza.** Dalla 2.0.0 quel compito è del driver: è lui che sa se le proprie transazioni riescono, e può usare `Probe()` finché crede il proprio dispositivo assente. Vedi `DS3231_RtcHandler` per il pattern di riferimento.
 
-`Enable()`/`Disable()` sono flag-only: l'inizializzazione del bus (`Wire.begin()` sui pin configurati) avviene nella `Loop()` al primo ciclo da abilitato. `I2cBusHandler` deve restare l'**unico punto del sistema** che inizializza il bus — nessun'altra libreria o codice applicativo deve chiamare `Wire.begin()`.
+`Enable()`/`Disable()` sono flag-only: `Wire.begin()` sui pin configurati avviene nella `Loop()` al primo ciclo da abilitato. `I2cBusHandler` resta l'**unico punto del sistema** che inizializza il bus.
+
+## Perché la presenza è stata spostata nei driver
+
+Dall'ESP-IDF 5.4 il core Arduino compila `esp32-hal-i2c-ng.c`, costruito sul driver `i2c_master`. Lì le due operazioni prendono strade diverse:
+
+| Operazione | API IDF | Oggetto |
+|---|---|---|
+| scrittura a zero byte (il probe) | `i2c_master_probe()` | handle del **bus** |
+| ogni altra transazione | `i2c_master_transmit[_receive]()` | handle di **dispositivo**, uno per indirizzo |
+
+Un probe periodico sullo stesso indirizzo che un driver sta usando significa alternare le due API molte volte al secondo. Con la divisione dei compiti attuale questo non può più accadere: **chi sonda non transa, e chi transa non sonda**.
 
 ## Alias globale
 
@@ -20,65 +31,82 @@ extern I2cBusHandler& I2cBus;
 I2cBus.SetSdaPin(21);
 I2cBus.SetSclPin(22);
 I2cBus.SetFrequency(100000);   // opzionale, default 100 kHz
-I2cBus.SetClockTime(100);      // ms — periodo con cui Loop() viene chiamata
-
-I2cBus.AddDevice(0x68, "DS3231");
-I2cBus.SetAvailableDelay(0x68, 250);     // ms, opzionale (default 250)
-I2cBus.SetUnavailableDelay(0x68, 0);     // ms, opzionale (default 0)
-I2cBus.SetAvailableCallback(0x68, []() {
-    LOG(INFO, "Main", "DS3231 disponibile");
-});
-I2cBus.SetUnavailableCallback(0x68, []() {
-    LOG(WARNING, "Main", "DS3231 non disponibile");
-});
-
-I2cBus.Enable();   // flag-only: Wire.begin() avviene alla prima Loop()
+I2cBus.Enable();               // flag-only: Wire.begin() avviene alla prima Loop()
 ```
 
 Se i pin non sono configurati, `Loop()` non gira e logga una sola volta.
 
 ## Wiring con DMPOScheduler
 
-Il probe è veloce con dispositivo assente (NACK immediato) ma un bus fisicamente bloccato può causare timeout: la `Loop()` va nel task **low-rate**, mai in quello high-rate.
+La `Loop()` fa solo l'inizializzazione differita, quindi è leggerissima, ma va comunque nel task **low-rate** insieme ai driver che usano il bus — e **prima** di loro, così alla prima iterazione il bus è pronto.
 
 ```cpp
 Scheduler.AddFunction(LowRateTaskConfiguration, []() { I2cBus.Loop(); });
-
-I2cBus.SetClockTime(100);   // ms — deve corrispondere al PeriodUs del task / 1000
+Scheduler.AddFunction(LowRateTaskConfiguration, []() { Rtc.Loop(); });
 ```
 
 ## Uso dai driver dei dispositivi
 
 ```cpp
-if (I2cBus.IsAvailable(0x68)) {
-    if (I2cBus.TakeBus()) {        // mutex di bus, timeout default 50 ms
-        DateTime Now = _Rtc.now(); // transazione I2C
-        I2cBus.GiveBus();
-    }
+if (I2cBus.TakeBus()) {        // mutex di bus, timeout default 50 ms
+    DateTime Now = _Rtc.now(); // transazione I2C
+    I2cBus.GiveBus();
 }
 ```
 
-Un indirizzo non registrato con `AddDevice()` risulta sempre non disponibile.
+`Wire` ha già un lock proprio che copre sia la singola transazione sia la sequenza non-stop (`endTransmission(false)` lo tiene fino alla `requestFrom`). `TakeBus()`/`GiveBus()` serve per raggruppare operazioni **logicamente** indivisibili fatte di chiamate `Wire` separate, e per tenere fuori la scansione mentre un driver sta lavorando.
 
-Nota: il probe dice che il dispositivo *c'è*, non che i dati sono validi — la validazione dei dati resta responsabilità del driver (le due protezioni sono complementari).
+Per sapere se il proprio dispositivo c'è, quando il driver lo crede assente:
+
+```cpp
+bool Present = I2cBus.Probe(0x68);   // prende il mutex da sola
+```
+
+Nota: il probe dice che il dispositivo *c'è*, non che i dati sono validi — la validazione resta responsabilità del driver.
+
+## Diagnostica
+
+```cpp
+I2cBus.GetSdaPin();      // pin e frequenza effettivi, non quelli che credi di aver impostato
+I2cBus.GetSclPin();
+I2cBus.GetFrequency();   // Hz
+I2cBus.IsReady();        // abilitato e bus inizializzato
+```
+
+Scansione dal vivo dell'intero bus:
+
+```cpp
+uint8_t FoundCount = 0;
+bool    Done       = I2cBus.Scan([](uint8_t Address) {
+    Serial.println("0x" + String(Address, HEX));
+}, &FoundCount);
+
+if      (!Done)           Serial.println("bus non pronto o occupato");
+else if (FoundCount == 0) Serial.println("nessun dispositivo trovato");
+```
+
+`Scan()` sonda da `I2C_BUS_HANDLER_FIRST_SCAN_ADDRESS` (0x08) a `I2C_BUS_HANDLER_LAST_SCAN_ADDRESS` (0x77) — sotto e sopra sono riservati dalla specifica I2C. Tiene il mutex **per tutta la spazzata**, così nessun driver si infila a metà rendendo incoerente la fotografia. È un comando manuale: non va messo in un task ciclico.
+
+`FoundCount` è opzionale ma quasi sempre serve: il callback è un puntatore a funzione, quindi non può catturare un contatore del chiamante.
 
 ## Controllo runtime
 
 ```cpp
 I2cBus.Enable();
-I2cBus.Disable();   // sospende il monitoraggio; il bus resta inizializzato
+I2cBus.Disable();   // il bus resta inizializzato
 ```
-
-A bus disabilitato i segnali di disponibilità restano congelati all'ultimo stato noto (`IsAvailable()` compreso).
 
 ## Limiti
 
-- Fino a `I2C_BUS_HANDLER_MAX_DEVICES` (8) dispositivi registrabili.
 - Una istanza, un bus: gestisce `Wire` (o il `TwoWire` passato con `SetWirePort()`); il secondo controller dell'ESP32 (`Wire1`) richiederebbe un'evoluzione della libreria.
+- Nessun limite al numero di dispositivi, perché non li conosce.
+
+## Migrazione dalla 1.x
+
+Rimossi `AddDevice()`, `IsAvailable()`, `SetAvailableCallback()`, `SetUnavailableCallback()`, `SetAvailableDelay()`, `SetUnavailableDelay()` e `SetClockTime()`. Un driver che li usava deve ora tenersi un `DigitalSignalHandler` proprio, alimentarlo con l'esito delle proprie transazioni e sondare con `Probe()` quando crede il dispositivo assente. L'API vista dall'applicazione non cambia, se il driver continua a esporre il proprio `IsAvailable()`.
 
 ## Dipendenze
 
 - `Wire`
-- `DigitalSignalHandler`
 - `LoggerHandler`
 - FreeRTOS (mutex)

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <WiFi.h>   // necessario per WiFiClient: su Arduino 3.x le classi di rete stanno nella libreria Network e non arrivano piu' per via transitiva da ESPAsyncWebServer
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include <LoggerHandler.h>

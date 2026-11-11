@@ -39,6 +39,11 @@
 #ifndef LOGGER_FILE_WRITE_INTERVAL_MS
 #define LOGGER_FILE_WRITE_INTERVAL_MS 30000
 #endif
+// Riga scritta da EnableFileLog() come primissima cosa del file: separa i riavvii
+// in un log che si accumula fra un'accensione e l'altra.
+#ifndef LOGGER_FILE_SEPARATOR
+#define LOGGER_FILE_SEPARATOR         "================================================================================"
+#endif
 
 enum class LogType { Debug, Info, Warning, Error, FatalError };
 

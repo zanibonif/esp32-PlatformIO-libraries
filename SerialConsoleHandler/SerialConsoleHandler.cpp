@@ -21,6 +21,133 @@ void SerialConsoleHandler::AddMenuItem (const String& Label, std::function<void(
     _Items.push_back({ Label, Action });
 }
 
+// --- Richiesta di valori all'operatore ---
+
+// Butta quello che e' gia' in coda: e' stato digitato prima che il prompt
+// comparisse, quindi non puo' essere una risposta. Tipicamente e' il '\n' del CR/LF
+// con cui l'operatore ha selezionato la voce di menu — _ProcessInput() lancia
+// l'azione sul '\r' e lascia il '\n' nel buffer. Si svuota due volte a distanza di
+// qualche millisecondo perche' i due byte della coppia possono arrivare separati.
+void SerialConsoleHandler::_DrainInput () {
+    while (Serial.available() > 0) Serial.read();
+    delay(20);
+    while (Serial.available() > 0) Serial.read();
+}
+
+bool SerialConsoleHandler::ReadNumber (const String& Prompt, int MinValue, int MaxValue, int& Value, unsigned long TimeoutMs) {
+    _DrainInput();
+
+    Serial.print(Prompt + " [" + String(MinValue) + ".." + String(MaxValue) + "]: ");
+
+    String        Digits    = "";
+    unsigned long StartTime = millis();   // attesa di un umano: qui millis() e' la misura giusta
+
+    while ((millis() - StartTime) < TimeoutMs) {
+        if (Serial.available() <= 0) {
+            delay(1);   // azione manuale: cedere il core mentre si aspetta la tastiera
+            continue;
+        }
+
+        char C = (char)Serial.read();
+
+        if (C == SERIAL_CONSOLE_EXIT_KEY) {
+            Serial.println();
+            Serial.println("Annullato");
+            return false;
+        }
+
+        if (C == '\r' || C == '\n') {
+            // A cifre vuote un fine riga e' rumore, non una conferma: il CR/LF puo'
+            // arrivare spezzato e il secondo byte presentarsi dopo lo svuotamento
+            // iniziale. Per annullare c'e' ESC. Lo stesso vale per il solo segno meno.
+            if (Digits.length() == 0 || Digits == "-") continue;
+
+            Serial.println();
+            int Parsed = Digits.toInt();
+            if (Parsed < MinValue || Parsed > MaxValue) {
+                Serial.println("Valore fuori intervallo: " + String(Parsed));
+                return false;
+            }
+            Value = Parsed;
+            return true;
+        }
+
+        if (C == '\b' || C == 127) {
+            if (Digits.length() > 0) {
+                Digits.remove(Digits.length() - 1);
+                Serial.print("\b \b");
+            }
+            continue;
+        }
+
+        // Segno meno: solo come primo carattere, e solo se l'intervallo ammette
+        // valori negativi. Serve per cose come il fuso orario.
+        if (C == '-' && Digits.length() == 0 && MinValue < 0) {
+            Digits += C;
+            Serial.print(C);
+            continue;
+        }
+
+        if (C >= '0' && C <= '9') {
+            Digits += C;
+            Serial.print(C);   // echo
+        }
+    }
+
+    Serial.println();
+    Serial.println("Tempo scaduto");
+    return false;
+}
+
+bool SerialConsoleHandler::ReadText (const String& Prompt, uint8_t MaxLength, String& Value, bool MaskEcho, unsigned long TimeoutMs) {
+    _DrainInput();
+
+    Serial.print(Prompt + " [max " + String(MaxLength) + "]: ");
+
+    String        Text      = "";
+    unsigned long StartTime = millis();   // attesa di un umano: qui millis() e' la misura giusta
+
+    while ((millis() - StartTime) < TimeoutMs) {
+        if (Serial.available() <= 0) {
+            delay(1);   // azione manuale: cedere il core mentre si aspetta la tastiera
+            continue;
+        }
+
+        char C = (char)Serial.read();
+
+        if (C == SERIAL_CONSOLE_EXIT_KEY) {
+            Serial.println();
+            Serial.println("Annullato");
+            return false;
+        }
+
+        if (C == '\r' || C == '\n') {
+            Serial.println();
+            Value = Text;
+            return true;
+        }
+
+        if (C == '\b' || C == 127) {
+            if (Text.length() > 0) {
+                Text.remove(Text.length() - 1);
+                Serial.print("\b \b");
+            }
+            continue;
+        }
+
+        // ASCII stampabili, spazi compresi: SSID e password possono contenerli
+        if (C >= 0x20 && C <= 0x7E) {
+            if (Text.length() >= MaxLength) continue;
+            Text += C;
+            Serial.print(MaskEcho ? '*' : C);
+        }
+    }
+
+    Serial.println();
+    Serial.println("Tempo scaduto");
+    return false;
+}
+
 // --- Controllo runtime ---
 
 void SerialConsoleHandler::Enable () {

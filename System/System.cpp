@@ -48,7 +48,11 @@ String GetWakeUpReason () {
         default:                               WakeUpReasonString = "SYSTEM_JUST_POWERED_ON"; break;
     }
 
-    LOG(INFO, "GetWakeUpReason", "Wake up reason is " + WakeUpReasonString);
+    // Nessun log qui: questa e' una lettura, e il motivo di risveglio e' un dato
+    // del boot, non un evento che accade quando qualcuno lo chiede. Loggandolo
+    // dentro al getter ogni richiesta di stato lasciava una riga nel log, che
+    // spuntava in mezzo a sequenze che non avevano niente a che vedere. Chi vuole
+    // il motivo nel log lo scriva lui all'avvio, come fa setup().
     return WakeUpReasonString;
 }
 
@@ -67,6 +71,10 @@ unsigned int GetCpuFrequency () {
 
 unsigned long long GetUptimeUs () {
     return (unsigned long long)esp_timer_get_time();
+}
+
+unsigned long long GetUptimeS () {
+    return (unsigned long long)(GetUptimeUs() / 1000000LL);
 }
 
 void SetSystemTime (DateTimeProvider& Provider) {
